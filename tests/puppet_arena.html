@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>puppet arena test</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#wrap{position:relative;height:100vh;aspect-ratio:9/16;margin:0 auto}#cv{width:100%;height:100%;display:block}</style></head>
+<body><div id="wrap"><canvas id="cv"></canvas></div>
+<script src="../src/arena_config.js"></script>
+<script src="../src/audio.js"></script>
+<script src="../src/arena_ui.js"></script>
+<script src="../assets/manifests/characters.js"></script><script src="../assets/manifests/items.js"></script><script src="../src/puppet.js"></script>
+<script src="../src/arena.js"></script>
+<script>
+G.puppet.basePath = "../"; G.puppet.load();
+window.__ended = null;
+window.startArena = function (loadout) { window.__ended = null; G.arena.start({ canvas: document.getElementById('cv'), onEnd: function (r) { window.__ended = r; }, loadout: loadout }); };
+</script></body></html>

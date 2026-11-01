@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#14161a">
+<title>Idle Cash &amp; Cartel</title>
+<link rel="icon" href="assets/bg/icon_192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="stage">
+  <section id="scr-loading" class="screen">
+    <div class="load-rain"></div>
+    <div class="load-title"><span class="lt-1">Idle Cash</span><span class="lt-2">&amp; Cartel</span></div>
+    <div class="load-foot">
+      <div id="loadbar" class="loadbar"><div class="loadbar-fill" id="loadfill"></div></div>
+      <button id="tap-start" class="tap-start" hidden>Tap to start</button>
+      <div id="load-note" class="load-note">Casing the joint...</div>
+    </div>
+  </section>
+
+  <section id="scr-hub" class="screen" hidden>
+    <header id="topbar">
+      <div class="cur" data-cur="cash"><i class="ci ci-cash"></i><b id="v-cash">0</b></div>
+      <div class="cur" data-cur="gold"><i class="ci ci-gold"></i><b id="v-gold">0</b></div>
+      <div class="cur" data-cur="gems"><i class="ci ci-gems"></i><b id="v-gems">0</b></div>
+      <div class="cur" data-cur="respect"><i class="ci ci-respect"></i><b id="v-respect">0</b></div>
+      <button id="btn-settings" class="gear" aria-label="Settings"></button>
+    </header>
+    <div id="subbar">
+      <div id="v-income" class="income">$0/s</div>
+      <div id="v-boost" class="boostchip" hidden>x2</div>
+    </div>
+    <main id="panes">
+      <div class="pane" id="pane-biz" data-pane="biz">
+        <div id="buymode" class="buymode" role="group" aria-label="Buy amount">
+          <button data-m="1" class="on">x1</button><button data-m="10">x10</button><button data-m="100">x100</button><button data-m="max">Max</button>
+        </div>
+        <div id="biz-list" class="list"></div>
+      </div>
+      <div class="pane" id="pane-crew" data-pane="crew" hidden><div id="crew-list" class="list"></div></div>
+      <div class="pane" id="pane-work" data-pane="work" hidden><div id="work-body"></div></div>
+      <div class="pane" id="pane-shop" data-pane="shop" hidden><div id="shop-body"></div></div>
+      <div class="pane" id="pane-raid" data-pane="raid" hidden><div id="raid-body"></div></div>
+    </main>
+    <nav id="tabbar">
+      <button class="tab on" data-tab="biz"><i class="ti ti-biz"></i><span>Businesses</span><em class="dot" hidden></em></button>
+      <button class="tab" data-tab="crew"><i class="ti ti-crew"></i><span>Crew</span><em class="dot" hidden></em></button>
+      <button class="tab" data-tab="work"><i class="ti ti-work"></i><span>Workshop</span><em class="dot" hidden></em></button>
+      <button class="tab" data-tab="shop"><i class="ti ti-shop"></i><span>Shop</span><em class="dot" hidden></em></button>
+      <button class="tab" data-tab="raid"><i class="ti ti-raid"></i><span>Raid</span><em class="dot" hidden></em></button>
+    </nav>
+  </section>
+
+  <section id="scr-arena" class="screen" hidden><canvas id="cv" width="540" height="960"></canvas></section>
+  <div id="modal-root"></div>
+  <div id="fx-root"></div>
+</div>
+
+<script src="assets/manifests/items.js"></script>
+<script src="assets/manifests/ui.js"></script>
+<script src="assets/manifests/world.js"></script>
+<script src="assets/manifests/characters.js" onerror="void 0"></script>
+<script src="src/config.js"></script>
+<script src="src/save.js"></script>
+<script src="src/economy.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/arena_config.js"></script>
+<script src="src/arena.js"></script>
+<script src="src/arena_ui.js"></script>
+<script>/* optional */</script>
+<script src="src/puppet.js" onerror="void 0"></script>
+<script src="src/ui.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>

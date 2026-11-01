@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"><title>puppet test</title>
+<style>html,body{margin:0;background:#2a2d33}canvas{display:block}</style></head>
+<body><canvas id="cv"></canvas>
+<script src="../assets/manifests/characters.js"></script>
+<script src="../assets/manifests/items.js"></script>
+<script src="../src/puppet.js"></script>
+<script>
+G.puppet.basePath = '../';
+window.__ready = false;
+G.puppet.load(function (d, t) { if (d === t) window.__ready = true; });
+var DIRS = ['e', 'se', 's', 'sw', 'w', 'nw', 'n', 'ne'];
+var STATES = ['idle', 'walk', 'shoot', 'hurt', 'dead'];
+// grid: 8 facings x 5 states for one kind
+window.renderGrid = function (kind, weaponId, scale) {
+  var cv = document.getElementById('cv'), CW = 200, CH = 240; cv.width = CW * 8; cv.height = CH * 5;
+  var ctx = cv.getContext('2d'); ctx.fillStyle = '#3a3f47'; ctx.fillRect(0, 0, cv.width, cv.height);
+  var sc = scale || 2.0 * 90 / G.puppet.size(kind) * (G.puppet.size(kind) / 90) ;
+  for (var r = 0; r < 5; r++) for (var c = 0; c < 8; c++) {
+    var st = STATES[r], a = { kind: kind, x: c * CW + CW / 2, y: r * CH + CH * 0.78, facing: c * Math.PI / 4, moving: st === 'walk', speed: 1, state: st === 'walk' ? 'walk' : st, t: st === 'shoot' ? 0.03 : st === 'hurt' ? 0.04 : st === 'dead' ? 0.3 : 0, animT: st === 'walk' ? 0.37 : 0.5, weaponId: weaponId || null, scale: 175 / G.puppet.size(kind) };
+    ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(c * CW + 1, r * CH + 1, CW - 2, CH - 2);
+    G.puppet.draw(ctx, a);
+    ctx.fillStyle = '#ff0'; ctx.font = '12px sans-serif'; ctx.fillText(DIRS[c] + ' ' + st, c * CW + 4, r * CH + 14);
+  }
+};
+// strip: walk cycle, 8 animT values, for given facings
+window.renderStrip = function (kind, weaponId) {
+  var cv = document.getElementById('cv'), CW = 130, CH = 220, fs = [0, Math.PI / 2, Math.PI, -Math.PI / 2]; cv.width = CW * 8; cv.height = CH * 4;
+  var ctx = cv.getContext('2d'); ctx.fillStyle = '#3a3f47'; ctx.fillRect(0, 0, cv.width, cv.height);
+  for (var r = 0; r < 4; r++) for (var c = 0; c < 8; c++) {
+    var a = { kind: kind, x: c * CW + CW / 2, y: r * CH + CH * 0.8, facing: fs[r], moving: true, speed: 1, state: 'walk', t: 0, animT: c * (2 * Math.PI / 11) / 8, weaponId: weaponId || null, scale: 150 / G.puppet.size(kind) };
+    G.puppet.draw(ctx, a);
+  }
+};
+</script></body></html>
