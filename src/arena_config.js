@@ -4,6 +4,15 @@ window.G = window.G || {};
   var C = {};
   C.W = 540; C.H = 960;
   C.DT = 1 / 60;
+  // ---------- world / camera ----------
+  C.WORLD_W = 1620; C.WORLD_H = 2400;   // world is larger than the 540x960 viewport
+  C.CAM_ZOOM = 1.35;                    // ctx scale; visible world rect = 540/zoom x 960/zoom
+  C.CAM_LERP = 7;                       // follow speed (1/s), exponential smoothing
+  C.HERO_MARGIN = 40;                   // hero keeps this far from the world edge
+  C.SPAWN_OUT = 40;                     // enemies spawn this far outside the visible camera rect
+  C.PROP_COUNT = 34; C.PROP_SCALE = 0.45; C.PROP_CLEAR = 150;   // props: count, sprite scale, no-prop radius around hero start
+  C.BORDER = 60;                        // dark wall strip thickness drawn around the world
+  C.DECAL_CAP = 60; C.RAIN_STREAKS = 48;
   C.MAX_STEPS_PER_FRAME = 5;
 
   // ---------- run structure ----------

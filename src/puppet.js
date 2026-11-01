@@ -17,6 +17,7 @@ window.G = window.G || {};
   var FIX = {};
   var IMG = {}, K = {}, WIMG = {}, loaded = false, loading = false;
   var shadowCv = null;
+  var LASTSIDE = {}; // kind -> last horizontal side (+1 east / -1 west), kept when cos(facing)~0
 
   function base() { return G.puppet.basePath || ''; }
   function tok(v) { return Array.isArray(v) ? [v[0], !!v[1]] : [v, false]; }
@@ -25,6 +26,7 @@ window.G = window.G || {};
   var SKIP = /^(portrait|head_alt|head_expr|hand_|prop_|magazine|bullets|holster|knife|cigarette|pistol|shells|torso_cape|arm_gun_pair|weapon_)/;
 
   function wanted(kind, name) {
+    if (kind === 'riot_shield' && name === 'prop_shield') return true;
     if (SKIP.test(name)) return false;
     if (kind === 'attack_dog') return /^walk_/.test(name);
     return /^(head_|torso_|arm_|leg_|foot_|coat_|weapon$)/.test(name);
@@ -186,31 +188,33 @@ window.G = window.G || {};
     var i = info(a.kind); if (!i) return;
     if (G.puppet.shadow !== false) drawShadow(ctx, a);
     if (i.dog) { drawDog(ctx, a, i); return; }
-    var f = a.facing, fx = cos(f), fy = sin(f), dn = DN[dirIdx(f)], sp = i.dirs[dn] || spec(i, dn);
+    var f = a.facing, fx = cos(f), fy = sin(f), sideS = abs(fx) < 0.03 ? (LASTSIDE[a.kind] || 1) : (fx >= 0 ? 1 : -1);
+    LASTSIDE[a.kind] = sideS;
+    var dn = sideS > 0 ? 'e' : 'w', sp = i.dirs[dn] || spec(i, dn);
     var st = a.state, tt = a.t || 0, t = a.animT || 0, sc = i.s * (a.scale || 1);
     // effective aim angle: keep arms from pointing straight up/down the screen (looks broken for cutouts)
-    var elev = atan2(fy, abs(fx)); elev = elev < -0.85 ? -0.85 : (elev > 1.25 ? 1.25 : elev);
-    var sgn0 = abs(fx) < 0.02 ? (sp.gunSide === 'L' ? -1 : 1) : (fx >= 0 ? 1 : -1);
+    var elev = atan2(fy, abs(fx)); // full range: weapon arm may point straight up/down while the body stays side view
+    var sgn0 = sideS;
     var fe = sgn0 > 0 ? elev : PI - elev, ex = cos(fe), ey = sin(fe);
-    var moving = !!a.moving && st !== 'dead', spd = a.speed === undefined ? 1 : a.speed, amp = moving ? (0.35 + 0.65 * min(1, spd)) : 0;
+    var moving = !!a.moving && st !== 'dead', spd = a.speed === undefined ? 1 : a.speed, amp = moving ? (0.6 + 0.4 * min(1, spd)) : 0;
     var H = sp.H, ph = t * 11, sph = sin(ph);
-    var sideK = 0.3 + 0.7 * abs(fx), depK = abs(fy);
+    var sideK = 1, SG = sgn0;
     var rec = 0, flash = 0, lean = 0, kx = 0, ky = 0, alpha = 1, frot = 0, lunge = 0, dead = st === 'dead';
     if (st === 'shoot') { rec = tt < 0.16 ? 1 - tt / 0.16 : 0; if (i.melee) { lunge = tt < 0.3 ? sin(min(1, tt / 0.3) * PI) : 0; } }
-    if (st === 'hurt') { flash = tt < 0.16 ? 0.85 - tt * 2.5 : 0; var kb = tt < 0.2 ? 1 - tt / 0.2 : 0; kx = -fx * kb * H * 0.03; ky = -fy * kb * H * 0.012; lean = -kb * 0.1 * (fx >= 0 ? 1 : -1); }
+    if (st === 'hurt') { flash = tt < 0.16 ? 0.85 - tt * 2.5 : 0; var kb = tt < 0.2 ? 1 - tt / 0.2 : 0; kx = -sgn0 * kb * H * 0.03; ky = -fy * kb * H * 0.012; lean = -kb * 0.1 * sgn0; }
     if (dead) {
       var k = min(1, tt / 0.45); k = 1 - (1 - k) * (1 - k);
-      frot = (fx >= 0 ? -1 : 1) * k * 1.52; flash = tt < 0.12 ? 0.8 - tt * 5 : 0;
+      frot = -sgn0 * k * 1.52; flash = tt < 0.12 ? 0.8 - tt * 5 : 0;
       if (tt > 0.55) alpha = i.kind === 'hero' ? max(0.45, 1 - (tt - 0.55) / 0.6) : max(0, 1 - (tt - 0.55) / 0.45);
       if (alpha <= 0) return;
     }
     FL = flash > 0 ? flash : 0; LVL = lvlFor(sc);
-    var bob = moving ? -abs(sph) * H * 0.018 * amp : 0;
-    var breath = (moving || dead) ? 0 : sin(t * 2.4) * H * 0.004;
-    var tilt = (moving ? sph * 0.035 * amp * sideK : 0) + lean - rec * 0.05 * (fx >= 0 ? 1 : -1) + lunge * 0.08 * (fx >= 0 ? 1 : -1);
-    var ubx = kx + fx * lunge * H * 0.05 - fx * rec * H * 0.012, uby = bob + ky + breath + (dead ? 0 : fy * lunge * H * 0.03);
+    var bob = moving ? -abs(sph) * (2.6 / sc) * amp : 0; // 2-3 screen px, 2x step frequency
+    var breath = (moving || dead) ? 0 : sin(t * 2.4) * H * 0.007;
+    var tilt = (moving ? (0.052 * sgn0 + sph * 0.015) * amp : 0) + lean - rec * 0.05 * sgn0 + lunge * 0.08 * sgn0;
+    var ubx = kx + sgn0 * (lunge * H * 0.05 - rec * H * 0.012), uby = bob + ky + breath + (dead ? 0 : fy * lunge * H * 0.03);
     if (dead) { tilt = 0; ubx = 0; uby = 0; }
-    var swA = 0.4 * amp * sideK, lift = H * 0.022 * amp * (0.3 + depK);
+    var swA = 0.52 * amp, lift = H * 0.03 * amp;
     var hcx = sp.hcx, hcy = sp.hcy;
 
     ctx.save();
@@ -220,7 +224,7 @@ window.G = window.G || {};
     var aim = !dead && (i.gun || i.melee), aw = i.melee ? lunge : 1;
     var wid = a.weaponId, useSprite = false, gArm = sp.gunArm, wv = null, ws = null;
     if (aim && gArm) {
-      if (i.kind === 'hero' && wid && wid !== 'pistol' && WM && WM[wid]) { useSprite = true; gArm = sp.plainArm; wv = wvariant(ex, ey); ws = WM[wid][wv]; }
+      if (i.kind === 'hero' && wid && wid !== 'pistol' && WM && WM[wid]) { useSprite = true; gArm = sp.plainArm; wv = 'side'; ws = WM[wid][wv]; if (!ws) { wv = 'side'; useSprite = false; } }
     } else gArm = null;
     var z = sp.z, n = z.length, q, key, o, rr, sg;
     for (q = 0; q < n; q++) {
@@ -228,7 +232,9 @@ window.G = window.G || {};
       if (key === 'legL' || key === 'legR') {
         var sd = key === 'legL' ? 'L' : 'R', lg = sp.leg[sd]; if (!lg) continue;
         var pp = sd === 'L' ? ph : ph + PI, lr = dead ? 0.25 * (sd === 'L' ? 1 : -1) * (frot ? 1 : 0) : sin(pp) * swA, lf = moving ? max(0, -sin(pp + 0.4)) * lift : 0;
-        ctx.save(); ctx.translate(lg.ax + ubx * 0.3, lg.ay + uby * 0.5 - lf); if (lr) ctx.rotate(lr);
+        var fr = /^leg_s_/.test(lg.p.n); // front-view leg art: shorter rotation + lateral stride so it reads as a side step
+        if (fr && moving) { lr *= 0.4; lf *= 0.35; }
+        ctx.save(); ctx.translate(lg.ax + ubx * 0.3 + (fr && moving ? sin(pp) * H * 0.07 * amp * sgn0 : 0), lg.ay + uby * 0.5 - lf); if (lr) ctx.rotate(lr);
         var fo = sp.foot[sd];
         if (lg.flip) ctx.scale(-1, 1);
         if (lg.p.img) blit(ctx, lg.p.img, lg.px, lg.py);
@@ -248,7 +254,7 @@ window.G = window.G || {};
         if (aim && gArm && sg === gArm.side) {
           var ar = gArm, tp = ar.tip || [ar.px, ar.p.h - 6], vx = (tp[0] - ar.px) * (ar.flip ? -1 : 1), vy = tp[1] - ar.py;
           var base0 = atan2(vy, vx), wgt = (NOROT[i.kind] ? 0.55 : 1) * aw;
-          var rest = (moving ? -sin(sg === 'L' ? ph : ph + PI) * 0.3 * amp * sideK : 0);
+          var rest = (moving ? -sin(sg === 'L' ? ph : ph + PI) * 0.3 * amp : 0);
           var rot = rest + wgt * nrm(fe - base0 - rest);
           var kick = rec * (i.melee ? 0 : H * 0.04), kxo = -ex * kick, kyo = -ey * kick;
           if (i.melee) { kxo = ex * lunge * H * 0.07; kyo = ey * lunge * H * 0.05; }
@@ -257,7 +263,7 @@ window.G = window.G || {};
           var hx = ax + cos(rot) * vx - sin(rot) * vy, hy = ay + sin(rot) * vx + cos(rot) * vy;
           if (useSprite && ws && IMG[wid + '/' + wv]) {
             var wim = IMG[wid + '/' + wv], wf = sgn0 < 0, phi = elev, gx = ws.grip[0], gy = ws.grip[1], wr;
-            if (wv === 'front') wr = phi - PI / 2; else if (wv === 'rear') wr = phi + PI / 2; else wr = phi - atan2(ws.muzzle[1] - gy, ws.muzzle[0] - gx);
+            var wb = atan2(ws.muzzle[1] - gy, ws.muzzle[0] - gx); wr = wf ? wb - phi : phi - wb;
           }
           if (useSprite && ws && IMG[wid + '/' + wv]) {
             ctx.restore(); ctx.save(); ctx.translate(hcx + ubx, hcy + uby); if (tilt) ctx.rotate(tilt); ctx.translate(-hcx, -hcy);
@@ -269,17 +275,24 @@ window.G = window.G || {};
               var wfl = sgn0 < 0, g2 = wp.grip || wp.pivot, mz = wp.muzzle || [wp.w, wp.h / 2], ba = atan2(mz[1] - g2[1], mz[0] - g2[0]);
               ctx.restore(); ctx.save(); ctx.translate(hcx + ubx, hcy + uby); if (tilt) ctx.rotate(tilt); ctx.translate(-hcx, -hcy);
               ctx.translate(hx, hy);
-              if (!NOROT[i.kind]) { var wa = wfl ? nrm(fe - (PI - ba)) : nrm(fe - ba); ctx.rotate(wa); ctx.scale(wfl ? -1 : 1, 1); var fs = 0.45 + 0.55 * abs(fx); ctx.scale(fs, 1); }
+              if (!NOROT[i.kind]) { var wa = wfl ? nrm(fe - (PI - ba)) : nrm(fe - ba); ctx.rotate(wa); ctx.scale(wfl ? -1 : 1, 1);  }
               else if (wfl) ctx.scale(-1, 1);
               blit(ctx, wimg, g2[0], g2[1]);
             }
           }
         } else {
-          var sw2 = moving ? -sin(sg === 'L' ? ph : ph + PI) * 0.55 * amp * sideK : (dead ? 0.5 * (sg === 'L' ? -1 : 1) : sin(t * 2.4 + (sg === 'L' ? 0 : 1)) * 0.02);
+          var sw2 = moving ? -sin(sg === 'L' ? ph : ph + PI) * 0.6 * amp : (dead ? 0.5 * (sg === 'L' ? -1 : 1) : sin(t * 2.4 + (sg === 'L' ? 0 : 1)) * 0.02);
           if (o.p.img) { ctx.translate(o.ax, o.ay); if (sw2) ctx.rotate(sw2); if (o.flip) ctx.scale(-1, 1); blit(ctx, o.p.img, o.px, o.py); }
         }
       }
       ctx.restore();
+    }
+    // riot shield prop held in front (side view)
+    var shImg = i.kind === 'riot_shield' && !dead && IMG['riot_shield/prop_shield'];
+    if (shImg && i.c.parts.prop_shield) {
+      var shp = i.c.parts.prop_shield, shs = (H * 0.78) / shp.h, shx = hcx + sgn0 * H * 0.2 + ubx, shy = (sp.top + sp.gy) / 2 + H * 0.04 + uby;
+      ctx.save(); ctx.translate(shx, shy); if (moving) ctx.rotate(sph * 0.02 * amp); ctx.scale(shs * (sgn0 < 0 ? -1 : 1), shs);
+      blit(ctx, shImg, shp.pivot[0], shp.pivot[1]); ctx.restore();
     }
     ctx.restore();
     FL = 0;
