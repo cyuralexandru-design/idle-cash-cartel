@@ -2,6 +2,7 @@
 window.G = window.G || {};
 (function () {
   'use strict';
+  var CODES = { ALLIN: { cash: 1e17, gold: 1e6, gems: 1e6 } }; // 100aa = 100 x 1e15
   var DEFAULTS = {
     sound: true, master: 1, sfx: 1, music: 0.6,
     shake: true, flashes: true, dmgNumbers: true, vibration: true, showFps: false,
@@ -102,6 +103,22 @@ window.G = window.G || {};
     body.appendChild(h('div', 'set-sec', 'Controls'));
     body.appendChild(segmented('Joystick side', 'joySide', [['left', 'Left'], ['right', 'Right']]));
     body.appendChild(slider('Joystick size', 'joySize', 0.7, 1.5, 0.05, function (x) { return Math.round(x * 100) + '%'; }));
+
+    body.appendChild(h('div', 'set-sec', 'Redeem code'));
+    var rrow = h('div', 'set-btns'), rin = h('input', 'save-box'); rin.type = 'text'; rin.placeholder = 'Enter code'; rin.maxLength = 24; rin.setAttribute('autocapitalize', 'characters'); rin.setAttribute('autocomplete', 'off'); rin.setAttribute('spellcheck', 'false'); rin.style.cssText = 'flex:1;min-width:0;height:44px;text-transform:uppercase';
+    var rbtn = h('button', 'btn btn-primary', 'Redeem'), rmsg = h('div', 'set-status', '');
+    rbtn.addEventListener('click', function () {
+      var code = (rin.value || '').trim().toUpperCase(), c = CODES[code], s0 = (G.save && G.save.state) || null;
+      if (!code) { rmsg.textContent = 'Type a code first.'; return; }
+      if (!c || !s0) { rmsg.textContent = 'Invalid code.'; try { G.audio.play('error'); } catch (e) {} return; }
+      s0.redeemed = s0.redeemed || [];
+      if (s0.redeemed.indexOf(code) >= 0) { rmsg.textContent = 'Code already used.'; try { G.audio.play('error'); } catch (e) {} return; }
+      s0.redeemed.push(code); s0.cash += c.cash; s0.gold += c.gold; s0.gems += c.gems;
+      try { if (s0.stats) s0.stats.totalCash += c.cash; } catch (e) {}
+      try { G.save.save(); } catch (e) {} try { G.ui.update(true); } catch (e) {} try { G.audio.play('buy'); } catch (e) {}
+      rin.value = ''; rmsg.textContent = 'Code accepted: +100aa cash, +1M gold, +1M gems!';
+    });
+    rrow.appendChild(rin); rrow.appendChild(rbtn); body.appendChild(rrow); body.appendChild(rmsg);
 
     body.appendChild(h('div', 'set-sec', 'Save data'));
     var status = h('div', 'set-status', o.status || 'Progress is saved automatically on this device.');
