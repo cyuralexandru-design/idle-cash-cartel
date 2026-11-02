@@ -112,8 +112,7 @@ window.G = window.G || {};
       if (!code) { rmsg.textContent = 'Type a code first.'; return; }
       if (!c || !s0) { rmsg.textContent = 'Invalid code.'; try { G.audio.play('error'); } catch (e) {} return; }
       s0.redeemed = s0.redeemed || [];
-      if (s0.redeemed.indexOf(code) >= 0) { rmsg.textContent = 'Code already used.'; try { G.audio.play('error'); } catch (e) {} return; }
-      s0.redeemed.push(code); s0.cash += c.cash; s0.gold += c.gold; s0.gems += c.gems;
+      s0.cash += c.cash; s0.gold += c.gold; s0.gems += c.gems;
       try { if (s0.stats) s0.stats.totalCash += c.cash; } catch (e) {}
       try { G.save.save(); } catch (e) {} try { G.ui.update(true); } catch (e) {} try { G.audio.play('buy'); } catch (e) {}
       rin.value = ''; rmsg.textContent = 'Code accepted: +100aa cash, +1M gold, +1M gems!';
