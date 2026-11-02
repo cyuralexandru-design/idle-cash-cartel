@@ -15,7 +15,9 @@ window.G = window.G || {};
       Object.keys(M.businesses || {}).forEach(function (id) { [1, 2, 3].forEach(function (l) { var e = M.businesses[id][l]; if (e) add((e.thumb || e).file); }); });
       Object.keys(M.managers || {}).forEach(function (id) { add(M.managers[id].icon && M.managers[id].icon.file); });
       Object.keys(M.weapons || {}).forEach(function (id) { add(M.weapons[id].side && M.weapons[id].side.file); });
-      try { G.inventory.iconFiles().forEach(function (k) { if (M.icons[k]) add(M.icons[k].file); }); } catch (e) {}
+      try { G.inventory.iconKeys().forEach(function (k) { if (M.icons[k]) add(M.icons[k].file); }); } catch (e) {}
+      try { G.inventory.iconFiles().forEach(add); } catch (e) {}
+      try { add(M.map.img); } catch (e) {}
       ['star', 'medal_gold', 'laurel_wreath', 'briefcase', 'map_pin', 'chest', 'handshake'].forEach(function (k) { if (M.icons && M.icons[k]) add(M.icons[k].file); });
       try { G.chapters.list.forEach(function (c) { add(c.art); }); G.story.preloadFiles().forEach(add); } catch (e) {}
       ['cash_stack', 'gold_bars', 'ruby_gem', 'crown', 'gear', 'crew', 'upgrade_chevrons', 'gift_box', 'skull', 'crosshair', 'boost_2x', 'no_ads_badge', 'safe', 'gift', 'biz_bank', 'lock'].forEach(function (k) { if (M.icons && M.icons[k]) add(M.icons[k].file); });

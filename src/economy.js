@@ -200,6 +200,7 @@ window.G = window.G || {};
       gold = Math.floor(gold * (1 + (ex.gold_pct || 0)));
       var gems = 0, prev = s.stats.bestWave;
       R.gemMilestones.forEach(function (m) { if (prev < m && wave >= m) gems += R.gemMilestoneReward; });
+      gems += Math.max(0, Math.floor(+r.gems || 0));   // gems picked up in the arena (boss drops)
       addCash(cash);
       s.gold += gold; s.gems += gems;
       s.stats.runs += 1;

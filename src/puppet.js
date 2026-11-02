@@ -34,7 +34,7 @@ window.G = window.G || {};
   function fileList() {
     var out = [], c, k, n, id, v;
     for (k in M) {
-      c = M[k]; if (k === 'crew' || !c.parts) continue;
+      c = M[k]; if (k === 'crew' || !c.parts || (C3 && C3[k])) continue;
       for (n in c.parts) if (wanted(k, n)) out.push([k + '/' + n, c.parts[n].file, 0]);
     }
     if (WM) for (id in WM) for (v in WM[id]) if (WM[id][v] && WM[id][v].file) out.push([id + '/' + v, WM[id][v].file, 1]);
@@ -127,7 +127,7 @@ window.G = window.G || {};
   }
   // draw part image with pivot at origin of current transform (flip handled by caller via scale)
   function blit(ctx, img, px, py) {
-    var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height, s = LVL ? mip(img, LVL) : img;
+    var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height, s = LVL ? ((img._m && img._m[LVL]) || mip(img, LVL)) : img;
     ctx.drawImage(s, -px, -py, w, h);
     if (FL > 0) { ctx.globalAlpha = FL; ctx.drawImage(tint(s), -px, -py, w, h); ctx.globalAlpha = 1; }
   }
@@ -146,7 +146,7 @@ window.G = window.G || {};
   }
   var NOMINAL = {};
 
-  function lvlFor(sc) { var l = Math.floor(Math.log(1 / (sc * (G.puppet.mipBias || 1.5))) / 0.6931); return l < 0 ? 0 : (l > 3 ? 3 : l); }
+  function lvlFor(sc) { var l = Math.floor(Math.log(1 / (sc * (G.puppet.mipBias || 1.0))) / 0.6931); return l < 0 ? 0 : (l > 3 ? 3 : l); }
 
   // ---------------------------------------------------------------- shadow
   function shadowImg() {
@@ -158,7 +158,7 @@ window.G = window.G || {};
     return shadowCv;
   }
   function drawShadow(ctx, a) {
-    var i = info(a.kind); if (!i) return;
+    var i = (C3 && info3(a.kind)) || info(a.kind); if (!i) return;
     var sc = (a.scale || 1), w = i.w * 0.55 * sc * (i.dog ? 1.1 : 1) + 10;
     if (a.state === 'dead') { var tt = a.t || 0; if (tt > 0.5) ctx.globalAlpha = max(0, 1 - (tt - 0.5) / 0.5); }
     ctx.drawImage(shadowImg(), a.x - w / 2, a.y - w * 0.14, w, w * 0.4);
@@ -185,6 +185,8 @@ window.G = window.G || {};
   // ---------------------------------------------------------------- main draw
   function draw(ctx, a) {
     if (!loaded) return;
+    var i3 = C3 && info3(a.kind);
+    if (i3) { if (G.puppet.shadow !== false) drawShadow(ctx, a); draw3(ctx, a, i3); return; }
     var i = info(a.kind); if (!i) return;
     if (G.puppet.shadow !== false) drawShadow(ctx, a);
     if (i.dog) { drawDog(ctx, a, i); return; }
@@ -298,28 +300,184 @@ window.G = window.G || {};
     FL = 0;
   }
 
+  // ================================================================ characters3 (3/4 skeleton puppets)
+  var C3 = null, IMG3 = {}, K3 = {};
+  var D2R = PI / 180, AIMMAX = 80 * D2R;
+  var HERO_WEAPON = { pistol: 'grip', revolver: 'grip', machine_pistol: 'weapon_smg', smg: 'weapon_smg', assault_rifle: 'weapon_smg', plasma_rifle: 'weapon_smg', laser_rifle: 'weapon_smg', plasma: 'weapon_smg', laser: 'weapon_smg', sawn_off: 'weapon_shotgun', pump_shotgun: 'weapon_shotgun', sniper: 'weapon_shotgun' };
+  function c3kinds() { var o = []; if (C3) for (var k in C3) o.push(k); return o; }
+  function pt3(i, n) { return i.P[n]; }
+  function info3(kind) {
+    var i = K3[kind]; if (i) return i;
+    var c = C3 && C3[kind]; if (!c) return null;
+    var P = {}, n, p, q;
+    for (n in c.parts) {
+      q = c.parts[n]; p = P[n] = { n: n, w: q.w, h: q.h, px: q.pivot[0], py: q.pivot[1], img: IMG3[kind + '/' + n], m: q };
+      if (q.end) {
+        var vx = q.end[0] - q.pivot[0], vy = q.end[1] - q.pivot[1], a = atan2(vy, vx);
+        p.len = Math.sqrt(vx * vx + vy * vy);
+        p.r0 = -a; // normalise limb axis to angle 0; theta passed to limb() is the absolute axis direction (down = PI/2)
+      }
+    }
+    var r = c.rig;
+    i = K3[kind] = { kind: kind, c: c, P: P, r: r, H: r.height, s: r.target_px / r.height, target: r.target_px, melee: !!r.melee, mode: r.weaponMode, coat: !!r.coat, pan: (function (a) { var o = {}; (a || []).forEach(function (n) { o[n] = 1; }); return o; })(r.panels), w: r.target_px * 0.62, h: r.target_px, c3: true };
+    i.torsoPP = { img: P.torso.img, px: 0, py: 0 };
+    var g = P.hand_near_grip.m; i.gbeta = atan2(g.muzzle[1] - g.grip[1], g.muzzle[0] - g.grip[0]);
+    ['weapon', 'weapon_smg', 'weapon_shotgun', 'weapon_pistol'].forEach(function (w) { var pp = P[w]; if (pp) pp.beta = atan2(pp.m.muzzle[1] - pp.m.grip[1], pp.m.muzzle[0] - pp.m.grip[0]); });
+    i.nHx = P.hand_near_open.m.pivot; i.hold = r.hold.hand_near_open;
+    i.soleOff = P.shoe_near.m.sole - P.shoe_near.m.pivot[1];
+    return i;
+  }
+  // frame matrices [a,b,c,d,e,f]; pp() composes frame * T(x,y) * R(rot) and draws with a single setTransform (no save/restore)
+  var FG = [1, 0, 0, 1, 0, 0], FLG = [1, 0, 0, 1, 0, 0], FTO = [1, 0, 0, 1, 0, 0], CF = FG;
+  function comp(o, m, tx, ty, rot) {
+    var c = cos(rot), s = sin(rot), a = m[0], b = m[1], c2 = m[2], d = m[3];
+    o[4] = a * tx + c2 * ty + m[4]; o[5] = b * tx + d * ty + m[5];
+    o[0] = a * c + c2 * s; o[1] = b * c + d * s; o[2] = -a * s + c2 * c; o[3] = -b * s + d * c;
+  }
+  function pp(ctx, p, x, y, rot) {
+    if (!p.img) return;
+    var m = CF, c = rot ? cos(rot) : 1, s = rot ? sin(rot) : 0;
+    ctx.setTransform(m[0] * c + m[2] * s, m[1] * c + m[3] * s, -m[0] * s + m[2] * c, -m[1] * s + m[3] * c, m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]);
+    blit(ctx, p.img, p.px, p.py);
+  }
+  var EX = 0, EY = 0;
+  // draw limb: pivot at (x,y), axis direction theta (absolute); sets EX,EY to the child attach point
+  function limb(ctx, p, x, y, th) {
+    pp(ctx, p, x, y, th + p.r0);
+    EX = x + cos(th) * p.len; EY = y + sin(th) * p.len;
+  }
+  function wsel(i, a) {
+    // returns {mode:'baked'|'sprite'|'fist', w: weaponPartName}
+    var m = i.mode;
+    if (m === 'baked') return { m: 'baked' };
+    if (m === 'sprite_fist') return { m: 'fist', w: 'weapon' };
+    var h = HERO_WEAPON[a.weaponId || 'pistol'];
+    if (!h || h === 'grip') return { m: 'baked' };
+    return { m: 'sprite', w: h };
+  }
+
+  function prep3All() {
+    if (!C3) return;
+    for (var k in C3) { var i = info3(k); if (!i) continue; var l0 = lvlFor(i.s * 0.9), l1 = lvlFor(i.s * 1.4), n, p; for (n in i.P) { p = i.P[n]; if (!p.img) continue; for (var l = 1; l <= min(4, max(l0, l1) + 1); l++) mip(p.img, l); } }
+  }
+  function draw3(ctx, a, i) {
+    var P = i.P, kind = a.kind, f = a.facing, fx = cos(f), fy = sin(f);
+    var side = abs(fx) < 0.03 ? (LASTSIDE[kind] || 1) : (fx >= 0 ? 1 : -1); LASTSIDE[kind] = side;
+    var phi = atan2(fy, abs(fx)); if (phi > AIMMAX) phi = AIMMAX; else if (phi < -AIMMAX) phi = -AIMMAX;
+    var st = a.state, tt = a.t || 0, t = a.animT || 0, sc = i.s * (a.scale || 1), dead = st === 'dead';
+    var moving = !!a.moving && !dead, spd = a.speed === undefined ? 1 : a.speed, amp = moving ? (0.6 + 0.4 * min(1, spd)) : 0;
+    var ph = t * 11, sph = sin(ph), cph = cos(ph), inv = 1 / sc;
+    var rec = 0, flash = 0, hurtK = 0, alpha = 1, frot = 0, shooting = st === 'shoot', mouth = false;
+    if (shooting) { rec = tt < 0.16 ? 1 - tt / 0.16 : 0; mouth = tt < 0.25; }
+    if (st === 'hurt') { flash = tt < 0.16 ? 0.85 - tt * 2.5 : 0; hurtK = tt < 0.2 ? 1 - tt / 0.2 : 0; mouth = true; }
+    if (dead) {
+      var k = min(1, tt / 0.45); k = 1 - (1 - k) * (1 - k); frot = -side * k * 1.52; flash = tt < 0.12 ? 0.8 - tt * 5 : 0; mouth = true;
+      if (tt > 0.55) alpha = kind === 'hero' ? max(0.45, 1 - (tt - 0.55) / 0.6) : max(0, 1 - (tt - 0.55) / 0.45);
+      if (alpha <= 0) return;
+    }
+    FL = flash > 0 ? flash : 0; LVL = lvlFor(sc);
+    var breath = (moving || dead) ? 0 : sin(t * 2.4);
+    var tor = P.torso.m;
+    // ---- leg kinematics (y down, hip at y=0)
+    var base = moving ? 0 : 0.1, fN = base + 0.489 * amp * sph, fF = -base - 0.489 * amp * sph;
+    var flN = 0.7 * amp * max(0, cph), flF = 0.7 * amp * max(0, -cph);
+    if (dead) { fN = 0.35; fF = -0.3; flN = 0.3; flF = 0; }
+    var th1 = P.thigh_near, sh1 = P.shin_near, th2 = P.thigh_far, sh2 = P.shin_far;
+    var tN = PI / 2 - fN, sN = tN + flN, tF = PI / 2 - fF, sF = tF + flF;
+    var kNx = th1.len * cos(tN), kNy = th1.len * sin(tN), aNx = kNx + sh1.len * cos(sN), aNy = kNy + sh1.len * sin(sN);
+    var kFx = th2.len * cos(tF), kFy = th2.len * sin(tF), aFx = kFx + sh2.len * cos(sF), aFy = kFy + sh2.len * sin(sF);
+    var so = i.soleOff, lowest = max(aNy, aFy) + so;
+    var hipY = moving ? -(lowest * 0.6 + (th1.len + sh1.len + so) * 0.4) : -lowest;
+    var lean = (moving ? 0.052 * amp : 0) - hurtK * 0.1 - rec * 0.04; if (dead) lean = 0;
+    var hxN = tor.hip_near[0] - tor.hip[0], hxF = tor.hip_far[0] - tor.hip[0];
+    var rN = 0.5 * max(0, -fN) + 0.2 * flN, rF = 0.5 * max(0, -fF) + 0.2 * flF;
+
+    var m0 = ctx.getTransform();
+    ctx.save();
+    if (alpha < 1) ctx.globalAlpha = alpha;
+    var G0 = FG; G0[0] = m0.a; G0[1] = m0.b; G0[2] = m0.c; G0[3] = m0.d; G0[4] = m0.e; G0[5] = m0.f;
+    comp(FLG, G0, a.x, a.y, frot); // ground frame at feet (then scaled/mirrored)
+    FG[0] = FLG[0] * side * sc; FG[1] = FLG[1] * side * sc; FG[2] = FLG[2] * sc; FG[3] = FLG[3] * sc; FG[4] = FLG[4]; FG[5] = FLG[5];
+    comp(FG, FG, -hurtK * 6 * inv * 0.3, 0, 0);
+    // torso frame
+    comp(FTO, FG, 0, hipY, lean); comp(FTO, FTO, -tor.hip[0], -tor.hip[1], 0);
+    // ---------- far arm + back panel (torso frame)
+    CF = FTO;
+    var sf = tor.shoulder_far, sw = amp * 0.5 * sph, thU = PI / 2 - sw + (moving ? 0 : 0.05 + breath * 0.012) + (dead ? -0.5 : 0);
+    var bend = 0.18 + 0.7 * max(0, -sw) + (dead ? 0.3 : 0);
+    limb(ctx, P.arm_far_upper, sf[0], sf[1], thU); var ex = EX, ey = EY;
+    limb(ctx, P.arm_far_fore, ex, ey, thU - bend); pp(ctx, P.hand_far_open, EX, EY, thU - bend + 0.15);
+    if (i.pan.back) pp(ctx, P.back, tor.hip[0] - 34, tor.hip[1] - 16, (moving ? 0.1 * amp + 0.07 * amp * sin(ph - 0.9) : breath * 0.012) + 0.04);
+    // ---------- legs (shoe, shin, thigh on top) in ground frame shifted to hip height
+    comp(FLG, FG, 0, hipY, 0); CF = FLG;
+    pp(ctx, P.shoe_far, hxF + aFx, aFy, rF); limb(ctx, sh2, hxF + kFx, kFy, sF); limb(ctx, th2, hxF, 0, tF);
+    pp(ctx, P.shoe_near, hxN + aNx, aNy, rN); limb(ctx, sh1, hxN + kNx, kNy, sN); limb(ctx, th1, hxN, 0, tN);
+    // ---------- upper body (torso frame)
+    CF = FTO;
+    if (i.pan.side_a) pp(ctx, P.side_a, tor.hip[0] + 8, tor.hip[1] - 20, (moving ? 0.09 * amp + 0.06 * amp * sin(ph - 0.7) : breath * 0.01));
+    pp(ctx, i.torsoPP, 0, 0, 0);
+    var nk = P.neck, np = tor.neck, tpx = np[0] + nk.px - nk.m.base[0], tpy = np[1] + nk.py - nk.m.base[1];
+    pp(ctx, nk, tpx, tpy, 0);
+    var hd = mouth ? P.head_open : P.head;
+    pp(ctx, hd, tpx, tpy, -lean * 0.6 + (moving ? sph * 0.012 : breath * 0.006) + hurtK * -0.08);
+    // ---------- near arm + weapon
+    var ws = wsel(i, a), S = tor.shoulder_near, ang, rk = rec * 30;
+    if (i.melee) {
+      var ready = phi * 0.4 + 0.5 + (moving ? sph * 0.05 : breath * 0.02);
+      if (shooting) {
+        var u = min(1, tt / 0.3), w2 = tt > 0.3 ? min(1, (tt - 0.3) / 0.3) : 0, e = u * u * (3 - 2 * u);
+        var swa = (phi - 1.5) + e * 2.1; ang = swa + (ready - swa) * w2; rk = 0;
+      } else ang = ready;
+    } else ang = phi + (moving ? sph * 0.02 : breath * 0.01) - rec * 0.05;
+    if (dead) ang = 1.1;
+    var cx = cos(ang), cy = sin(ang), sx = S[0] - cx * rk, sy = S[1] - cy * rk;
+    var upA = P.arm_near_upper, foA = P.arm_near_fore;
+    var tu = ang + (dead ? 0 : 0.2), tf = ang - (dead ? 0 : 0.1);
+    limb(ctx, upA, sx, sy, tu); limb(ctx, foA, EX, EY, tf);
+    var wx = EX, wy = EY;
+    if (ws.m === 'baked') {
+      var gh = P.hand_near_grip; pp(ctx, gh, wx, wy, ang - i.gbeta);
+    } else {
+      var hh = ws.m === 'fist' ? P.hand_near_grip : P.hand_near_open, hold = ws.m === 'fist' ? hh.m.grip : i.hold;
+      var hcx = cos(ang), hsn = sin(ang), ox = hold[0] - hh.px, oy = hold[1] - hh.py;
+      var gx = wx + hcx * ox - hsn * oy, gy = wy + hsn * ox + hcx * oy, wp = P[ws.w];
+      if (wp) pp(ctx, wp, gx, gy, ang - wp.beta);
+      pp(ctx, hh, wx, wy, ang);
+    }
+    ctx.restore();
+    ctx.setTransform(m0.a, m0.b, m0.c, m0.d, m0.e, m0.f);
+    FL = 0;
+  }
+
   // ---------------------------------------------------------------- loading / API
   G.puppet = {
     basePath: '',
     shadow: true,
     load: function (cb) {
       M = (window.G_MANIFEST && window.G_MANIFEST.characters) || null; WM = (window.G_MANIFEST && window.G_MANIFEST.weapons) || null;
-      if (!M) { if (cb) cb(0, 0); return; }
+      C3 = (window.G_MANIFEST && window.G_MANIFEST.characters3) || null;
+      if (!M && !C3) { if (cb) cb(0, 0); return; }
       if (loading) return; loading = true;
-      var list = fileList(), total = list.length, done = 0, b = base();
+      var list = M ? fileList() : [], total, done = 0, b = base(), k, n, c;
+      if (C3) for (k in C3) for (n in C3[k].parts) if (n !== 'portrait') list.push(['c3:' + k + '/' + n, C3[k].parts[n].file, 0]);
+      total = list.length;
       if (!total) { loaded = true; if (cb) cb(0, 0); return; }
       list.forEach(function (e) {
-        var im = new Image(), fin = function () { done++; if (cb) cb(done, total); if (done === total) loaded = true; };
+        var im = new Image(), fin = function () {
+          done++; if (cb) cb(done, total);
+          if (done === total) { prep3All(); loaded = true; }
+        };
         im.onload = fin; im.onerror = function () { e.missing = true; fin(); };
-        IMG[e[0]] = im; im.src = b + e[1];
+        if (e[0].indexOf('c3:') === 0) IMG3[e[0].slice(3)] = im; else IMG[e[0]] = im;
+        im.src = b + e[1];
       });
     },
     ready: function () { return loaded; },
     draw: draw,
     drawShadow: drawShadow,
-    sizeOf: function (kind) { var i = M && info(kind); if (!i) return { w: 40, h: 80, footY: 80 }; return { w: i.w, h: i.h, footY: i.h }; },
-    size: function (kind) { var i = M && info(kind); return i ? i.h : 80; },
-    defaultScale: function (kind) { var i = M && info(kind); return i ? i.s : 0.2; },
+    sizeOf: function (kind) { var i3 = C3 && info3(kind); if (i3) return { w: i3.w, h: i3.h, footY: i3.h }; var i = M && info(kind); if (!i) return { w: 40, h: 80, footY: 80 }; return { w: i.w, h: i.h, footY: i.h }; },
+    size: function (kind) { var i3 = C3 && info3(kind); if (i3) return i3.h; var i = M && info(kind); return i ? i.h : 80; },
+    defaultScale: function (kind) { var i3 = C3 && info3(kind); if (i3) return i3.s; var i = M && info(kind); return i ? i.s : 0.2; },
     fix: FIX
   };
 })();

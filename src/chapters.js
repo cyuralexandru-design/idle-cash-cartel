@@ -5,9 +5,9 @@ window.G = window.G || {};
   var S = function () { return G.save.state; };
   var WAVES = 15;
   var LIST = [
-    { n: 1, name: 'Docklands',    tag: 'Cold wharves, hot cargo.',      art: 'assets/bg/bg_alley.jpg',   pos: '50% 62%' },
-    { n: 2, name: 'Soho',         tag: 'Neon, fog and bad debts.',      art: 'assets/bg/bg_street.jpg',  pos: '50% 40%' },
-    { n: 3, name: 'Canary Wharf', tag: 'Glass towers, dirty money.',    art: 'assets/bg/map_london.png', pos: '62% 50%' }
+    { n: 1, name: 'Docklands',    tag: 'Cold wharves, hot cargo.',      art: 'assets/chapters/ch1.jpg',  pos: '50% 50%' },
+    { n: 2, name: 'Soho',         tag: 'Neon, fog and bad debts.',      art: 'assets/chapters/ch2.jpg',  pos: '50% 50%' },
+    { n: 3, name: 'Canary Wharf', tag: 'Glass towers, dirty money.',    art: 'assets/chapters/ch3.jpg',  pos: '50% 50%' }
   ];
   function st() {
     var s = S(); if (!s.chapters || typeof s.chapters !== 'object') s.chapters = { progress: {}, selected: 1 };

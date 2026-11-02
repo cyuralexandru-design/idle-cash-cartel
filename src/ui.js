@@ -107,111 +107,13 @@ window.G = window.G || {};
     requestAnimationFrame(f);
   };
 
-  // ---------- build: businesses ----------
-  function artLevel(L) { return L >= 100 ? 3 : L >= 25 ? 2 : 1; }
-  function bizThumb(id, L) { return file('businesses', id, artLevel(L)) ? (M.businesses[id][artLevel(L)].thumb || M.businesses[id][artLevel(L)]).file : ''; }
-
-  function buildBiz() {
-    var list = $('biz-list'); list.innerHTML = '';
-    E().bizList().forEach(function (id) {
-      var c = h('div', 'biz card'); c.setAttribute('data-biz', id);
-      var art = h('div', 'biz-art'); var im = img(bizThumb(id, 1)); art.appendChild(im);
-      var lk = h('i', 'biz-lock'); art.appendChild(lk);
-      var main = h('div', 'biz-main');
-      var top = h('div', 'biz-top');
-      var name = h('div', 'biz-name'); var lv = h('div', 'biz-lv');
-      top.appendChild(name); top.appendChild(lv);
-      var inc = h('div', 'biz-inc');
-      var bar = h('div', 'bar collect'); var fill = h('div', 'bar-fill'); var bt = h('span', 'bar-text'); bar.appendChild(fill); bar.appendChild(bt);
-      var ms = h('div', 'biz-ms');
-      var acts = h('div', 'biz-acts');
-      var buy = h('button', 'btn btn-primary buy'); var bl = h('span', 'buy-l'); var bc = h('span', 'buy-c'); buy.appendChild(bl); buy.appendChild(bc);
-      var mg = h('button', 'btn btn-secondary mgr');
-      var mi = img(file('managers', id, 'icon'), 'mgr-ic'); var mc = h('span', 'mgr-c'); mg.appendChild(mi); mg.appendChild(mc);
-      acts.appendChild(buy); acts.appendChild(mg);
-      main.appendChild(top); main.appendChild(inc); main.appendChild(bar); main.appendChild(acts);
-      c.appendChild(art); c.appendChild(main); c.appendChild(ms);
-      var dot = h('em', 'dot'); dot.hidden = true; c.appendChild(dot);
-      list.appendChild(c);
-      var el = { c: c, im: im, name: name, lv: lv, inc: inc, bar: bar, fill: fill, bt: bt, buy: buy, bl: bl, bc: bc, mg: mg, mc: mc, dot: dot, art: art, ms: ms };
-      bizEls[id] = el;
-      tap(buy, function () {
-        var snap = lastSnap && lastSnap.businesses.filter(function (b) { return b.id === id; })[0];
-        var n = (!snap || snap.level < 1) ? 1 : (ui.mode === 'max' ? 'max' : +ui.mode);
-        var bought = E().buy(id, n);
-        if (bought) {
-          sfx('buy'); seenBiz[id] = true; ui.float('+' + bought + ' Lv', buy, 'f-lv');
-          c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop'); ui.update(true);
-        } else { sfx('hurt'); ui.shake(buy); }
-      });
-      tap(mg, function () {
-        if (E().hireManager(id)) { sfx('buy'); ui.float('Manager hired', mg, 'f-lv'); ui.update(true); } else ui.shake(mg);
-      });
-      tap(bar, function () {
-        var got = E().collect(id);
-        if (got > 0) { sfx('coin'); ui.float('+' + money(got), bar, 'f-cash'); ui.update(true); }
-      });
-    });
-  }
-
-  ui.shake = function (el) { el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope'); };
-
+  // ---------- businesses: map + interior (src/map.js) ----------
+  function buildBiz() { G.map.build($('pane-biz')); }
   function updBiz(snap) {
-    var mode = ui.mode, anyNew = false;
-    snap.businesses.forEach(function (b) {
-      var el = bizEls[b.id]; if (!el) return;
-      var vis = b.visible || b.owned;
-      setHide(el.c, !vis);
-      if (!vis) return;
-      var locked = b.state === 'locked', owned = b.owned;
-      setCls(el.c, 'is-locked', locked); setCls(el.c, 'is-owned', owned); setCls(el.c, 'is-avail', b.state === 'available');
-      var src = bizThumb(b.id, Math.max(1, b.level));
-      if (el.im._s !== src) { el.im._s = src; el.im.src = src; }
-      setText(el.name, locked ? 'Locked' : b.name);
-      setText(el.lv, owned ? 'Lv ' + b.level : '');
-      var prev = b.index > 0 ? snap.businesses[b.index - 1].name : '';
-      var ms = b.milestone;
-      if (locked) setText(el.inc, 'Open ' + prev + ' first');
-      else if (!owned) setText(el.inc, 'Opens at +' + money(b.incomeNext) + '/s');
-      else if (ms) setText(el.inc, '+' + money(b.income) + '/s   x2 at Lv ' + ms.next);
-      else setText(el.inc, '+' + money(b.income) + '/s');
-      // collect bar
-      setHide(el.bar, !owned);
-      if (owned) {
-        if (b.manager.hired) {
-          setCls(el.bar, 'auto', true); setCls(el.bar, 'ready', false);
-          setText(el.bt, 'Running itself');
-          if (el.fill._w !== '100') { el.fill._w = '100'; el.fill.style.width = '100%'; }
-        } else {
-          setCls(el.bar, 'auto', false);
-          var p = b.accCap > 0 ? Math.min(1, b.acc / b.accCap) : 0, pw = (p * 100).toFixed(1);
-          if (el.fill._w !== pw) { el.fill._w = pw; el.fill.style.width = pw + '%'; }
-          setCls(el.bar, 'ready', b.acc > 0.5);
-          setText(el.bt, b.acc > 0.5 ? 'Collect ' + money(b.acc) : 'Nothing yet');
-        }
-      }
-      // buy button
-      var n = 1, cost = b.cost1, label = owned ? 'Buy' : 'Open', can = b.canAfford;
-      if (owned) {
-        if (mode === '10') { n = 10; cost = b.cost10; } else if (mode === '100') { n = 100; cost = b.cost100; }
-        else if (mode === 'max') { n = Math.max(1, b.maxN); cost = b.costMax; }
-        label = 'Buy x' + n; can = snap.cash >= cost && (mode !== 'max' || b.maxN > 0);
-        if (mode === 'max') label = 'Max x' + (b.maxN || 0);
-      }
-      setText(el.bl, locked ? 'Locked' : label); setText(el.bc, locked ? '' : money(cost));
-      setDis(el.buy, locked || !can);
-      // manager
-      var mgr = b.manager;
-      setHide(el.mg, !owned);
-      if (owned) {
-        setText(el.mc, mgr.hired ? 'Hired' : money(mgr.cost));
-        setDis(el.mg, mgr.hired || !mgr.canAfford); setCls(el.mg, 'hired', mgr.hired);
-      }
-      if (b.state === 'available' && b.canAfford && !seenBiz[b.id]) anyNew = true;
-      setHide(el.dot, !(b.state === 'available' && b.canAfford && !seenBiz[b.id]));
-    });
-    return anyNew;
+    G.map.update(snap);
+    return snap.businesses.some(function (b) { return b.state === 'available' && b.canAfford && !seenBiz[b.id]; });
   }
+  ui.shake = function (el) { el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope'); };
 
   // ---------- build: crew ----------
   function buildCrew() {
@@ -231,7 +133,7 @@ window.G = window.G || {};
       tap(b, function () {
         if (G.crew.hired(id)) {
           if (G.crew.levelUp(id)) { sfx('buy'); ui.float('Crew level up', b, 'f-lv'); G.save.save(); ui.update(true); } else ui.shake(b);
-        } else if (E().hireManager(id)) { sfx('buy'); ui.float('Hired', b, 'f-lv'); G.save.save(); ui.update(true); } else ui.shake(b);
+        } else if (E().hireManager(id)) { sfx('buy'); ui.float('Hired', b, 'f-lv'); G.save.save(); ui.update(true); try { G.story.playHire(id); } catch (e) {} } else ui.shake(b);
       });
     });
   }
@@ -266,8 +168,8 @@ window.G = window.G || {};
   // ---------- build: inventory (gear / arsenal / upgrades) ----------
   var inv = { sub: 'gear', sel: null, filter: 'all', sig: '' }, invEls = {};
   var SLOT_ORDER_L = ['weapon', 'chain', 'gloves'], SLOT_ORDER_R = ['jacket', 'pants', 'shoes'];
-  function itemSrc(it) { var k = G.inventory.iconOf(it); return G.inventory.iconUri(k) || file('icons', k); }
-  function slotGhost(slot) { var k = G.inventory.SLOT_DEFS[slot].items[0][1]; return G.inventory.iconUri(k) || file('icons', k); }
+  function itemSrc(it) { var p = null; try { p = G.inventory.iconFor(it.slot, it.rarity); } catch (e) {} if (p) return p; var k = G.inventory.iconOf(it); return G.inventory.iconUri(k) || file('icons', k); }
+  function slotGhost(slot) { var p = null; try { p = G.inventory.iconFor(slot, 0); } catch (e) {} if (p) return p; var k = G.inventory.SLOT_DEFS[slot].items[0][1]; return G.inventory.iconUri(k) || file('icons', k); }
   function frameOf(it) { return G.inventory.rarity(it.rarity).frame; }
   function itemTile(it, extra) {
     var t = h('div', 'it r-' + frameOf(it) + (extra ? ' ' + extra : ''));
@@ -678,6 +580,7 @@ window.G = window.G || {};
     $('panes').scrollTop = 0; if (!quiet) sfx('click'); ui.update(true);
     if (t === 'raid') ui.raidScrollTo(G.chapters.selected() - 1, true);
     if (t === 'inv') inv.sig = '';
+    if (t === 'biz' && G.map) setTimeout(function () { G.map.update(lastSnap); }, 0);
   };
 
   var invT0 = performance.now();

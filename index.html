@@ -33,19 +33,14 @@
       <div id="v-boost" class="boostchip" hidden>x2</div>
     </div>
     <main id="panes">
-      <div class="pane" id="pane-biz" data-pane="biz" hidden>
-        <div id="buymode" class="buymode" role="group" aria-label="Buy amount">
-          <button data-m="1" class="on">x1</button><button data-m="10">x10</button><button data-m="100">x100</button><button data-m="max">Max</button>
-        </div>
-        <div id="biz-list" class="list"></div>
-      </div>
+      <div class="pane" id="pane-biz" data-pane="biz" hidden></div>
       <div class="pane" id="pane-crew" data-pane="crew" hidden><div id="crew-list" class="list"></div></div>
       <div class="pane" id="pane-inv" data-pane="inv" hidden><div id="inv-body"></div></div>
       <div class="pane" id="pane-shop" data-pane="shop" hidden><div id="shop-body"></div></div>
       <div class="pane" id="pane-raid" data-pane="raid"><div id="raid-body"></div></div>
     </main>
     <nav id="tabbar">
-      <button class="tab" data-tab="biz"><img class="ti" src="assets/icons/map_pin.png" alt=""><span>Businesses</span><em class="dot" hidden></em></button>
+      <button class="tab" data-tab="biz"><img class="ti" src="assets/icons/map_pin.png" alt=""><span>Map</span><em class="dot" hidden></em></button>
       <button class="tab" data-tab="crew"><img class="ti" src="assets/icons/crew.png" alt=""><span>Crew</span><em class="dot" hidden></em></button>
       <button class="tab tab-raid on" data-tab="raid"><span class="raid-orb"><img class="ti" src="assets/icons/skull.png" alt=""></span><span>RAID</span><em class="dot" hidden></em></button>
       <button class="tab" data-tab="inv"><img class="ti" src="assets/icons/briefcase.png" alt=""><span>Inventory</span><em class="dot" hidden></em></button>
@@ -61,6 +56,9 @@
 <script src="assets/manifests/items.js"></script>
 <script src="assets/manifests/ui.js"></script>
 <script src="assets/manifests/world.js"></script>
+<script src="assets/manifests/map.js"></script>
+<script src="assets/manifests/fx2.js" onerror="void 0"></script>
+<script src="assets/manifests/items3.js" onerror="void 0"></script>
 <script src="assets/manifests/characters.js" onerror="void 0"></script>
 <script src="src/config.js"></script>
 <script src="src/save.js"></script>
@@ -69,12 +67,16 @@
 <script src="src/crew.js"></script>
 <script src="src/chapters.js"></script>
 <script src="src/audio.js"></script>
+<script src="assets/manifests/street.js" onerror="void 0"></script>
 <script src="src/arena_config.js"></script>
+<script src="src/street.js" onerror="void 0"></script>
 <script src="src/arena.js"></script>
 <script src="src/arena_ui.js"></script>
 <script>/* optional */</script>
+<script src="assets/manifests/characters3.js" onerror="void 0"></script>
 <script src="src/puppet.js" onerror="void 0"></script>
 <script src="src/story.js"></script>
+<script src="src/map.js"></script>
 <script src="src/ui.js"></script>
 <script src="src/main.js"></script>
 </body>

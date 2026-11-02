@@ -55,26 +55,26 @@ window.G = window.G || {};
     var anim = function (nm, x, y, rot, s, life) { var p = add(6, x, y, 0, 0, life, s, '#fff'); if (p) { p.nm = nm; p.rot = rot; } return p; };
     G.fx = {
       // animated muzzle flash (no-gun variant: the gun is drawn by the puppet)
-      muzzle: function (x, y, ang) {
+      muzzle: function (x, y, ang, big) {
         if (!setting('flashes')) return;
-        if (fxFrame('muzzle_flash', 0)) anim('muzzle_flash', x, y, ang, 0.3 + rnd() * 0.06, 0.12); else add(2, x + cos(ang) * 6, y + sin(ang) * 6, 0, 0, 0.06, 7, '#fff3b0');
+        if (fxFrame('x_muzzle', 0)) anim('x_muzzle', x, y, ang, (big ? 0.42 : 0.3) + rnd() * 0.05, 0.11); else if (fxFrame('muzzle_flash', 0)) anim('muzzle_flash', x, y, ang, 0.3 + rnd() * 0.06, 0.12); else add(2, x + cos(ang) * 6, y + sin(ang) * 6, 0, 0, 0.06, 7, '#fff3b0');
       },
       hit: function (x, y, ang) {
-        if (fxFrame('hit_spark', 0)) anim('hit_spark', x, y, rnd() * TAU, 0.26 + rnd() * 0.1, 0.115);
+        if (fxFrame('x_spark', 0)) anim('x_spark', x, y, rnd() * TAU, 0.24 + rnd() * 0.1, 0.12); else if (fxFrame('hit_spark', 0)) anim('hit_spark', x, y, rnd() * TAU, 0.26 + rnd() * 0.1, 0.115);
         for (var i = 0; i < 2; i++) { var a = ang + Math.PI + rr(-0.9, 0.9), s = rr(60, 190); add(0, x, y, cos(a) * s, sin(a) * s, rr(0.1, 0.2), 2, '#ffe9a0'); }
       },
       // ejected shell casing: pops out sideways/up, falls with gravity, fades on the ground
-      casing: function (x, y, ang) {
+      casing: function (x, y, ang, shell) {
         var side = ang - Math.PI / 2, sp = rr(30, 80);
-        var p = add(5, x, y, cos(side) * sp, sin(side) * sp - rr(60, 110), rr(0.55, 0.8), 0.2, '#e8b84a');
-        if (p) { p.g = 520; p.rot = rnd() * TAU; p.vr = rr(-14, 14); p.fr = rnd() * 4 | 0; p.t = rr(10, 22); }
+        var p = add(5, x, y, cos(side) * sp, sin(side) * sp - rr(60, 110), rr(0.7, 0.95), shell ? 0.125 : 0.13, '#e8b84a');
+        if (p) { p.g = 520; p.rot = rnd() * TAU; p.vr = rr(-16, 16); p.fr = rnd() * 3 | 0; p.t = rr(10, 22); p.nm = shell ? 'x_casing_shell' : 'x_casing_pistol'; }
       },
       blood: function (x, y, ang, n) { n = n || 4; for (var i = 0; i < n; i++) { var a = ang + rr(-1.2, 1.2), s = rr(40, 170); add(1, x, y, cos(a) * s, sin(a) * s, rr(0.25, 0.55), rr(1.5, 3.2), '#8e1b22'); } },
       explosion: function (x, y, r) {
         if (fxFrame('explosion', 0)) anim('explosion', x, y, 0, max(0.3, r / 85), 0.42); else add(3, x, y, 0, 0, 0.3, r, '#ffb347');
         for (var i = 0; i < 8; i++) { var a = rnd() * TAU, s = rr(60, 260); add(0, x, y, cos(a) * s, sin(a) * s, rr(0.2, 0.45), 2.5, i % 2 ? '#ff7043' : '#ffe082'); }
       },
-      coin: function (x, y, gold) { for (var i = 0; i < 4; i++) add(4, x + rr(-6, 6), y + rr(-6, 6), rr(-20, 20), rr(-90, -30), 0.4, 2, gold ? '#ffd23f' : '#6fe07a'); },
+      coin: function (x, y, gold) { for (var i = 0; i < 4; i++) add(4, x + rr(-6, 6), y + rr(-6, 6), rr(-20, 20), rr(-90, -30), 0.4, 2, gold === 2 ? '#ff5a78' : gold ? '#ffd23f' : '#6fe07a'); },
       beam: function (x1, y1, x2, y2, c) { beams.push({ x1: x1, y1: y1, x2: x2, y2: y2, t: 0.12, c: c, f: rnd() * 3 | 0 }); if (beams.length > 14) beams.shift(); },
       update: function (dt) {
         for (var i = 0; i < P.length; i++) {
@@ -84,7 +84,8 @@ window.G = window.G || {};
           if (p.k === 5) {
             p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
             p.t -= 1;   // p.t counts down the airborne frames; then it lies on the floor
-            if (p.t <= 0) { p.g = 0; p.vx *= 0.8; p.vy = 0; p.vr *= 0.8; }
+            if (p.t > 0) { if ((p.t & 3) === 0) p.fr++; }   // tumble: cycle the 3 orientations while airborne
+            else { p.g = 0; p.vx *= 0.8; p.vy = 0; p.vr *= 0.8; }
             continue;
           }
           p.x += p.vx * dt; p.y += p.vy * dt; var f = p.k === 4 ? 1 : 0.9; p.vx *= f; p.vy *= f;
@@ -101,9 +102,9 @@ window.G = window.G || {};
             continue;
           }
           if (pk === 5) {
-            var cf = fxFrame('shell_casing', p.fr);
+            var cf = p.nm ? fxFrame(p.nm, p.fr) : fxFrame('shell_casing', p.fr);
             ctx.globalAlpha = k > 0.35 ? 1 : k / 0.35;
-            if (cf) drawFx(ctx, cf, p.x, p.y, p.rot, p.s); else { ctx.fillStyle = '#e8b84a'; ctx.fillRect(p.x - 1.5, p.y - 1, 3, 2); }
+            if (cf) drawFx(ctx, cf, p.x, p.y, p.rot, p.s * (p.nm ? 1 : 1)); else { ctx.fillStyle = '#e8b84a'; ctx.fillRect(p.x - 1.5, p.y - 1, 3, 2); }
             ctx.globalAlpha = 1; continue;
           }
           ctx.globalAlpha = k > 1 ? 1 : k;
@@ -113,9 +114,16 @@ window.G = window.G || {};
         }
         ctx.globalAlpha = 1;
         for (var b = 0; b < beams.length; b++) {
-          var m = beams[b], ex = m.x2 - m.x1, ey = m.y2 - m.y1, len = sqrt(ex * ex + ey * ey), lf = fxFrame('laser', m.f + (S.tickT * 12 | 0));
+          var m = beams[b], ex = m.x2 - m.x1, ey = m.y2 - m.y1, len = sqrt(ex * ex + ey * ey), lf = fxFrame('x_laser', m.f + (S.tickT * 12 | 0)), lo = false;
           ctx.globalAlpha = min(1, m.t / 0.08);
-          if (lf) drawFx(ctx, lf, m.x1, m.y1, atan2(ey, ex), 0.34, len / (lf.d.w * 0.34));
+          if (lf) {   // glow core line + capsule segments tiled end to end along the beam
+            var ba = atan2(ey, ex), sc = 0.46, segw = (lf.d.w - 6) * sc, nseg = Math.ceil(len / segw);
+            ctx.strokeStyle = 'rgba(255,60,50,.35)'; ctx.lineWidth = 11; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke(); ctx.lineCap = 'butt';
+            ctx.save(); ctx.translate(m.x1, m.y1); ctx.rotate(ba);
+            for (var si = 0; si < nseg; si++) { var sf = fxFrame('x_laser', m.f + si + (S.tickT * 12 | 0)); if (sf) ctx.drawImage(sf.im, si * segw - 2 * sc, -sf.d.pivot[1] * sc, sf.d.w * sc, sf.d.h * sc); }
+            ctx.restore(); lo = true;
+          }
+          else if ((lf = fxFrame('laser', m.f + (S.tickT * 12 | 0)))) drawFx(ctx, lf, m.x1, m.y1, atan2(ey, ex), 0.34, len / (lf.d.w * 0.34));
           else { ctx.strokeStyle = '#ff3b30'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke(); ctx.strokeStyle = '#ffd0d0'; ctx.lineWidth = 1.8; ctx.stroke(); ctx.lineCap = 'butt'; }
         }
         ctx.globalAlpha = 1;
@@ -179,7 +187,7 @@ window.G = window.G || {};
     var save = null; try { save = G.save && G.save.state; } catch (e) {}
     S = {
       wave: 0, phase: 'idle', waveT: 0, waveLen: 20, spawnAcc: 0, spawned: 0, spawnTotal: 0, eliteLeft: 0, eliteEvery: 0,
-      kills: 0, cash: 0, cashEarned: 0, gold: 0, xp: 0, level: 1, pending: 0, resolved: 0,
+      kills: 0, cash: 0, cashEarned: 0, gold: 0, gems: 0, xp: 0, level: 1, pending: 0, resolved: 0,
       bag: { cash: 0, gold: 0 }, weapon: null, ch: null, minHp: 1, items: {}, cardBonus: {}, perm: permBonuses(), st: {},
       cards: null, cardRerolls: 0, offers: [], shopRerolls: 0, shake: 0, flash: 0, endT: 0, result: null, bossDown: false, boss: null,
       bossSpawned: false, miniSpawned: false, eliteSpawned: false, wlevels: (save && save.weapons) || {}, hintT: 4, tickT: 0
@@ -188,6 +196,7 @@ window.G = window.G || {};
     S.ch = pickChapter(); pub.chapter = S.ch.id; pub.chapterName = S.ch.name; pub.waves = S.ch.waves;
     hero = { kind: 'hero', x: WW / 2, y: WH / 2 + 60, r: C.HERO.r, hp: C.HERO.startHp, maxHp: 0, facing: -Math.PI / 2, moving: false, speed: 0, state: 'idle', t: 0, animT: 0, weaponId: null, scale: 1, inv: 0, hurtT: 0, shootT: 0, lsCd: 0, dead: false };
     recompute(); hero.hp = hero.maxHp;
+    try { if (G.street && G.street.load) G.street.load(function () {}); } catch (e) {}
     genProps(); snapCam();
     var sw = (opts.loadout && (opts.loadout.startWeapon || opts.loadout.weapon)) || (save && save.startWeapon) || C.START_WEAPON;
     if (!C.WEAPONS[sw]) sw = C.START_WEAPON;
@@ -286,7 +295,7 @@ window.G = window.G || {};
   function fireEnemyBullet(x, y, ang, spd, dmg) {
     var b = newBullet(); if (!b) return;
     b.active = true; b.friendly = false; b.x = x; b.y = y; b.vx = cos(ang) * spd; b.vy = sin(ang) * spd; b.r = C.ENEMY_BULLET_R; b.dmg = dmg; b.life = 4; b.pierce = 0; b.splash = 0; b.color = '#ff7a2d'; b.hitN = 0;
-    b.kind = 2; b.ang = ang; b.sc = C.ENEMY_BULLET_SCALE; b.tr = 0; b.age = 0;
+    b.kind = 2; b.ang = ang; b.sc = C.ENEMY_BULLET_SCALE; b.tr = 0; b.age = rnd() * 0.25;
   }
   // effective stats of the single weapon: evolved def x tier mults x stat bonuses
   function weaponStats(w) {
@@ -305,7 +314,7 @@ window.G = window.G || {};
     var ws = weaponStats(w), d = ws.def, st = S.st, ox = hero.x, oy = hero.y - (usePuppet() ? 14 : 3);
     var ang = atan2(target.y - oy, target.x - ox), ml = muzzleLen(d), mx = ox + cos(ang) * ml, my = oy + sin(ang) * ml;
     w.aim = ang; hero.shootT = 0.15; mz.x = mx; mz.y = my;
-    if (G.fx) { G.fx.muzzle(mx, my, ang); if (!d.beam && !d.bolt && G.fx.casing) G.fx.casing(ox + cos(ang) * 8, oy + sin(ang) * 8 - 2, ang); }
+    if (G.fx) { G.fx.muzzle(mx, my, ang, d.pellets > 1 || d.dmg >= 40); if (!d.beam && !d.bolt && G.fx.casing) G.fx.casing(ox + cos(ang) * 8, oy + sin(ang) * 8 - 2, ang, d.pellets > 1); }
     if (d.beam) {
       var x2 = mx + cos(ang) * ws.range, y2 = my + sin(ang) * ws.range, ex = x2 - mx, ey = y2 - my, L2 = ex * ex + ey * ey;
       if (G.fx) G.fx.beam(mx, my, x2, y2, d.color);
@@ -325,7 +334,7 @@ window.G = window.G || {};
       b.active = true; b.friendly = true; b.x = mx; b.y = my; b.vx = cos(a) * d.speed; b.vy = sin(a) * d.speed; b.r = C.BULLET_R;
       b.dmg = ws.dmg * (crit2 ? C.CRIT_MULT : 1); b.life = ws.range / d.speed + 0.04; b.pierce = ws.pierce; b.color = d.color; b.hitN = 0;
       b.splash = d.splash ? d.splash * (1 + st.explosion / 100) : 0;
-      b.kind = d.bolt === 'plasma' ? 1 : 0; b.ang = a; b.sc = (d.bsc || 1) * C.BULLET_SCALE; b.tr = d.tr || 0; b.age = 0;
+      b.kind = d.bolt === 'plasma' ? 1 : 0; b.ang = a; b.sc = (d.bsc || 1) * C.BULLET_SCALE; b.tr = d.pellets > 1 ? 0 : (d.tr === 1 ? 3 : d.tr === 2 ? 2 : 1); b.age = 0;
     }
     sfx('shoot');
   }
@@ -388,15 +397,17 @@ window.G = window.G || {};
   }
 
   // ---------------- pickups ----------------
-  function fillPickup(p, x, y, vx, vy, v, gold) { p.active = true; p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.v = v; p.gold = gold; p.mag = false; p.t = 0; p.rot = rnd() * TAU; }
-  function dropPickup(x, y, v, gold) {
+  function fillPickup(p, x, y, vx, vy, v, gold, gem, big) { p.active = true; p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.v = v; p.gold = gold; p.gem = gem | 0; p.big = big | 0; p.mag = false; p.t = 0; p.rot = rnd() * TAU; }
+  // gem: 0 none, 1 small, 2 large. big: 0 auto-tier by value, 1 bag, 2 case (boss drops)
+  function dropPickup(x, y, v, gold, gem, big) {
     var p = null;
     for (var i = 0; i < pickups.length; i++) if (!pickups[i].active) { p = pickups[i]; break; }
-    if (!p) { collect({ v: v, gold: gold, x: x, y: y }); return; }
+    if (!p) { collect({ v: v, gold: gold, gem: gem, x: x, y: y }); return; }
     var a = rnd() * TAU, s = rr(30, 110);
-    fillPickup(p, x, y, cos(a) * s, sin(a) * s, v, gold);
+    fillPickup(p, x, y, cos(a) * s, sin(a) * s, v, gold, gem, big);
   }
   function collect(p) {
+    if (p.gem) { S.gems += p.v; if (G.fx) G.fx.coin(p.x, p.y, 2); sfx('levelup'); return; }
     if (p.gold) { S.gold += p.v; gainXp(C.GOLD_BAR_XP * p.v); }
     else { var cv2 = Math.round(p.v * C.CASH_MULT); S.cash += cv2; S.cashEarned += cv2; gainXp(p.v); }
     if (G.fx) G.fx.coin(p.x, p.y, p.gold); sfx('coin');
@@ -430,9 +441,13 @@ window.G = window.G || {};
     S.kills++;
     var def = e.def, vm = valueMult(), el = e.elite;
     if (def.boss) {
-      var nd = def.drops, per = max(1, Math.round(def.val * vm));
-      for (var i = 0; i < nd; i++) dropPickup(e.x + rr(-30, 30), e.y + rr(-30, 30), per, false);
-      for (var g = 0; g < def.gold; g++) dropPickup(e.x + rr(-30, 30), e.y + rr(-30, 30), 1, true);
+      var nd = def.drops, per = max(1, Math.round(def.val * vm)), nCase = max(1, Math.round(nd * 0.3)), nBag = max(1, Math.round(nd * 0.25)), nRest = max(0, nd - nCase - nBag), i;
+      dropPickup(e.x + rr(-24, 24), e.y + rr(-24, 24), per * nCase, false, 0, 2);   // total value conserved: 1 case + 1 bag + the rest as bundles
+      dropPickup(e.x + rr(-30, 30), e.y + rr(-30, 30), per * nBag, false, 0, 1);
+      for (i = 0; i < nRest; i++) dropPickup(e.x + rr(-30, 30), e.y + rr(-30, 30), per, false);
+      var gl = def.gold; while (gl > 0) { var gv = gl >= 4 ? 4 : gl >= 2 ? 2 : 1; dropPickup(e.x + rr(-30, 30), e.y + rr(-30, 30), gv, true); gl -= gv; }
+      for (i = 0; i < (def.gems || 0); i++) dropPickup(e.x + rr(-34, 34), e.y + rr(-34, 34), C.GEM_VALUE_BIG, false, 2);
+      for (i = 0; i < (def.gemsSmall || 0); i++) dropPickup(e.x + rr(-34, 34), e.y + rr(-34, 34), C.GEM_VALUE_SMALL, false, 1);
       S.shake = 14; if (G.fx) G.fx.explosion(e.x, e.y, 70); sfx('explode');
       if (e.tag === 'boss') { S.bossDown = true; }
       if (S.boss === e) S.boss = null;
@@ -638,7 +653,7 @@ window.G = window.G || {};
     for (i = 0; i < enemies.length; i++) if (enemies[i].active) killEnemy(enemies[i], false);
     for (i = 0; i < bullets.length; i++) bullets[i].active = false;
     for (i = 0; i < warns.length; i++) warns[i].active = false;
-    for (i = 0; i < pickups.length; i++) { var p = pickups[i]; if (p.active) { p.active = false; if (p.gold) S.bag.gold += p.v; else S.bag.cash += p.v; } }
+    for (i = 0; i < pickups.length; i++) { var p = pickups[i]; if (p.active) { p.active = false; if (p.gem) S.gems += p.v; else if (p.gold) S.bag.gold += p.v; else S.bag.cash += p.v; } }
     if (S.wave >= S.ch.waves) { beginEnd(true); return; }
     var hv = S.st.harvesting;
     if (hv > 0) { var g = Math.round(hv * (1 + 0.08 * S.wave)); S.cash += g; S.cashEarned += g; gainXp(g); }
@@ -653,7 +668,7 @@ window.G = window.G || {};
   function mkResult(win) {
     var stars = 0;
     if (win) { stars = 1; for (var i = 1; i < C.STAR_HP.length; i++) if (S.minHp >= C.STAR_HP[i]) stars++; }
-    return { win: win, wave: S.wave, kills: S.kills, cash: 0, gold: 0, bossDown: !!S.bossDown, chapter: S.ch.id, chapterName: S.ch.name, stars: stars, weaponTier: S.weapon ? S.weapon.tier + 1 : 1 };
+    return { win: win, wave: S.wave, kills: S.kills, cash: 0, gold: 0, gems: 0, bossDown: !!S.bossDown, chapter: S.ch.id, chapterName: S.ch.name, stars: stars, weaponTier: S.weapon ? S.weapon.tier + 1 : 1 };
   }
   function beginEnd(win) {
     if (S.phase === 'ending' || S.phase === 'won') return;
@@ -666,7 +681,7 @@ window.G = window.G || {};
   function finishRun() {
     var r = S.result || mkResult(false);
     for (var i = 0; i < pickups.length; i++) if (pickups[i].active) { pickups[i].active = false; collect(pickups[i]); }
-    r.cash = S.cashEarned + (r.win ? C.BOSS_WIN_CASH : 0); r.gold = S.gold; r.wave = S.wave; r.kills = S.kills;
+    r.cash = S.cashEarned + (r.win ? C.BOSS_WIN_CASH : 0); r.gold = S.gold; r.gems = S.gems; r.wave = S.wave; r.kills = S.kills;
     var cb = opts && opts.onEnd; pub.lastResult = r; stop();
     if (cb) { try { cb(r); } catch (e) { console.error(e); } }
   }
@@ -809,7 +824,7 @@ window.G = window.G || {};
   }
   function syncPub() {
     pub.hp = hero.hp; pub.maxHp = hero.maxHp; pub.xp = S.xp; pub.xpNeed = C.xpNeed(S.level); pub.level = S.level; pub.wave = S.wave;
-    pub.timeLeft = max(0, S.waveLen - S.waveT); pub.cash = S.cash; pub.gold = S.gold; pub.kills = S.kills; pub.phase = S.phase;
+    pub.timeLeft = max(0, S.waveLen - S.waveT); pub.cash = S.cash; pub.gold = S.gold; pub.gems = S.gems; pub.kills = S.kills; pub.phase = S.phase;
     pub.bossHp = S.boss ? S.boss.hp : 0; pub.bossMaxHp = S.boss ? S.boss.maxHp : 0;
     var ne = 0, nb = 0, i; for (i = 0; i < enemies.length; i++) if (enemies[i].active) ne++; for (i = 0; i < bullets.length; i++) if (bullets[i].active) nb++;
     pub.enemies = ne; pub.bullets = nb;
@@ -873,6 +888,11 @@ window.G = window.G || {};
     ['muzzle_flash', 'bullet', 'bullet_trail', 'plasma', 'laser', 'hit_spark', 'shell_casing', 'explosion'].forEach(function (n) {
       if (M.fx && M.fx[n]) FXI[n] = M.fx[n].frames.map(function (fr) { return { im: loadImg(fr.file), d: fr }; });
     });
+    // fx2 sprites (G_MANIFEST.fx2): groups -> FXI['x_<name>'] frame lists, singles -> one-frame lists
+    var F2 = M.fx2; if (F2) for (var k2 in F2) {
+      var e2 = F2[k2]; if (/_\d$/.test(k2) && F2[k2.replace(/_\d$/, '')]) continue;
+      FXI['x_' + k2] = (e2.frames || [e2]).map(function (fr) { return { im: loadImg(fr.file), d: fr }; });
+    }
     icoImgs = {};
     ['cash_stack', 'money_bag', 'gold_bars', 'ruby_gem'].forEach(function (n) { if (M.icons && M.icons[n]) icoImgs[n] = { im: loadImg(M.icons[n].file), d: M.icons[n] }; });
     if (M.fx && M.fx.blood_small) for (var i = 0; i < M.fx.blood_small.frames.length; i++) decalImgs.push(loadImg(M.fx.blood_small.frames[i].file));
@@ -881,14 +901,34 @@ window.G = window.G || {};
   var SOLID_POOL = ['container_blue', 'container_red', 'container_green', 'container_yellow', 'crate_large', 'crate_large', 'crate_medium', 'crate_medium', 'crate_small', 'pallet_boxes', 'pallet_stack', 'pallet_wrapped',
     'barrel_blue', 'barrel_yellow', 'barrel_green', 'barrel_brown', 'barrel_brown', 'tires', 'car_suv', 'car_hatch', 'barrier_hazard', 'barrier_plain', 'barrier_redwhite', 'dumpster', 'electrical_box', 'burning_barrel', 'burning_barrel', 'lamp_post', 'cctv_pole'];
   var DECO_POOL = ['cone', 'cone', 'jerrycan_red', 'jerrycan_green', 'pallet', 'pallet_tarp'];
-  var solids = [];
+  var solids = [], streetCv = null, streetOn = false;
   function addProp(key, x, y, solid) {
     var d = window.G_MANIFEST && G_MANIFEST.props && G_MANIFEST.props[key]; if (!d) return null;
     var sc = C.PROP_SCALE, p = { k: key, d: d, x: x, y: y, sc: sc, img: propImgs[key], hw: d.footprint[0] * sc / 2, hh: d.footprint[1] * sc, solid: solid, glow: key === 'burning_barrel' };
     props.push(p); if (solid) solids.push(p); return p;
   }
   function genProps() {
-    loadAssets(); props = []; solids = [];
+    loadAssets(); props = []; solids = []; streetCv = null; streetOn = false;
+    var ST = G.street;
+    if (ST && ST.ready && ST.build) {   // street module (optional): cached floor+walls canvas, static solids, y-sorted decor
+      try {
+        if (ST.ready()) {
+          var sd = (rnd() * 4294967295) >>> 0, chn = S.ch ? S.ch.id : 1, cvs = ST.build(chn, WW, WH, sd);
+          if (cvs) {
+            streetCv = cvs; streetOn = true;
+            var sl = ST.solids ? ST.solids(chn, sd) : null, i0, q0;
+            if (sl) for (i0 = 0; i0 < sl.length; i0++) { q0 = sl[i0]; solids.push({ k: 'street_solid', x: q0.x + q0.w / 2, y: q0.y + q0.h, hw: q0.w / 2, hh: q0.h, solid: true, st: 1 }); }
+            var sp = ST.props ? ST.props(chn, sd) : null;
+            if (sp) for (i0 = 0; i0 < sp.length; i0++) {
+              q0 = sp[i0]; var fp = q0.footprint ? (q0.footprint.length ? { w: q0.footprint[0], h: q0.footprint[1] } : q0.footprint) : { w: q0.w * 0.8, h: q0.h * 0.25 };
+              var po = { k: 'street_prop', x: q0.x, y: q0.y, img: q0.img, dw: q0.w, dh: q0.h, dx: q0.dx || 0, dy: q0.dy || 0, flip: !!q0.flip, hw: fp.w / 2, hh: fp.h, solid: !!q0.solid, st: 1, glow: false, sc: 1, d: null };
+              props.push(po); if (po.solid) solids.push(po);
+            }
+            return;
+          }
+        }
+      } catch (e) { streetCv = null; streetOn = false; props = []; solids = []; }
+    }
     var M = window.G_MANIFEST; if (!M || !M.props) return;
     var s0 = (rnd() * 4294967296) >>> 0, rs = function () { s0 = (s0 + 0x6D2B79F5) | 0; var t = Math.imul(s0 ^ (s0 >>> 15), 1 | s0); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
     var sx = WW / 2, sy = WH / 2 + 60, tries = 0, placed = 0, edge = 150, key;
@@ -930,6 +970,11 @@ window.G = window.G || {};
     g.addColorStop(0, 'rgba(5,6,10,0)'); g.addColorStop(1, 'rgba(5,6,10,.6)'); c.fillStyle = g; c.fillRect(0, 0, W, H);
   }
   function drawFloor(c) {
+    if (streetOn && streetCv) {   // cached street canvas: blit only the visible camera rect
+      var k = streetCv.width / WW, sx0 = max(0, cam.l), sy0 = max(0, cam.t), sx1 = min(WW, cam.l + VW), sy1 = min(WH, cam.t + VH);
+      if (sx1 > sx0 && sy1 > sy0) c.drawImage(streetCv, sx0 * k, sy0 * k, (sx1 - sx0) * k, (sy1 - sy0) * k, sx0, sy0, sx1 - sx0, sy1 - sy0);
+      return;
+    }
     var TW = 540, TH = 960, im = imgOk(floorImg) ? floorImg : null;
     c.save(); c.beginPath(); c.rect(0, 0, WW, WH); c.clip();
     if (!im) { c.fillStyle = '#16181d'; c.fillRect(cam.l, cam.t, VW, VH); c.strokeStyle = 'rgba(255,255,255,.05)'; c.lineWidth = 1; c.beginPath(); for (var gx = Math.floor(cam.l / 60) * 60; gx < cam.l + VW; gx += 60) { c.moveTo(gx, cam.t); c.lineTo(gx, cam.t + VH); } for (var gy = Math.floor(cam.t / 60) * 60; gy < cam.t + VH; gy += 60) { c.moveTo(cam.l, gy); c.lineTo(cam.l + VW, gy); } c.stroke(); }
@@ -959,6 +1004,14 @@ window.G = window.G || {};
     if (cam.l + VW > WW - sh) { g = c.createLinearGradient(WW, 0, WW - sh, 0); g.addColorStop(0, 'rgba(0,0,0,.55)'); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(WW - sh, cam.t, sh, VH); }
   }
   function drawProp(c, p) {
+    if (p.st) {
+      var sim = p.img;   // ground shadow is already baked into the street canvas
+      if (sim && (sim.getContext || imgOk(sim))) {
+        if (p.flip) { c.save(); c.translate(p.x, 0); c.scale(-1, 1); c.drawImage(sim, p.dx, p.y + p.dy, p.dw, p.dh); c.restore(); }
+        else c.drawImage(sim, p.x + p.dx, p.y + p.dy, p.dw, p.dh);
+      }
+      return;
+    }
     var d = p.d, im = p.img, sc = p.sc;
     if (p.glow) { c.globalAlpha = 0.16 + 0.05 * sin(S.tickT * 9 + p.x); c.fillStyle = '#ff9a2e'; c.beginPath(); c.ellipse(p.x, p.y - 4, 62, 30, 0, 0, TAU); c.fill(); c.globalAlpha = 1; }
     c.fillStyle = 'rgba(0,0,0,.28)'; c.beginPath(); c.ellipse(p.x, p.y - 2, p.hw * 0.95, max(5, p.hh * 0.38), 0, 0, TAU); c.fill();
@@ -982,41 +1035,53 @@ window.G = window.G || {};
     var o = icoImgs[name]; if (!o || !imgOk(o.im)) return false;
     var h = wpx * o.d.h / o.d.w; c.drawImage(o.im, x - wpx / 2, y - h / 2, wpx, h); return true;
   }
+  // pickup sprites (fx2): target on-screen width in px per sprite; tiers by value, overridden by p.big / p.gem
+  var PK_W = { note_single: 25, note_fan: 28, note_bundle: 31, note_stack: 34, cash_bag: 30, cash_case: 42, gold_bar: 24, gold_bars3: 29, gold_pile: 35, gem_small: 20, gem_large: 29, coin: 18 };
+  function pickupSprite(p) {
+    if (p.gem) return p.gem === 2 ? 'gem_large' : 'gem_small';
+    if (p.gold) return p.v >= 4 ? 'gold_pile' : p.v >= 2 ? 'gold_bars3' : 'gold_bar';
+    if (p.big) return p.big === 2 ? 'cash_case' : 'cash_bag';
+    return pickupTier(p.v);
+  }
   function drawPickup(c, p) {
-    var bob = p.mag ? 0 : sin(S.tickT * 4 + p.rot * 3) * 1.4, y = p.y + bob - 2, x = p.x;
+    var bob = p.mag ? 0 : sin(S.tickT * 4 + p.rot * 3) * 1.4, y = p.y + bob - 2, x = p.x, nm = pickupSprite(p), f = fxFrame('x_' + nm, 0);
+    if (f) {
+      var w = (PK_W[nm] || 26) * 1.2, sc = w / f.d.w, big = nm === 'cash_case' || nm === 'cash_bag', hh = f.d.h * sc;
+      c.fillStyle = 'rgba(0,0,0,.3)'; c.beginPath(); c.ellipse(x, p.y + 4, w * 0.4, 3.2, 0, 0, TAU); c.fill();
+      var rot = (nm === 'note_single' || nm === 'note_fan' || nm === 'note_bundle') ? (p.rot % 1 - 0.5) * 0.5 : 0;
+      c.save(); c.translate(x, y - hh * 0.38); if (rot) c.rotate(rot); c.drawImage(f.im, -w / 2, -hh / 2, w, hh); c.restore();
+      var ph2 = (S.tickT * 0.9 + p.rot) % 1.6;
+      if (ph2 < 0.3 && !big || p.gem && ph2 < 0.4) { var a2 = sin(ph2 / 0.3 * Math.PI); if (a2 > 0) { var sx2 = x + w * 0.22 * cos(p.rot * 5), sy2 = y - hh * 0.55 + 3 * sin(p.rot * 7), r2 = 3.2 * a2; c.globalAlpha = a2; c.fillStyle = '#fff8d0'; c.beginPath(); c.moveTo(sx2 - r2, sy2); c.lineTo(sx2, sy2 - r2 * 1.4); c.lineTo(sx2 + r2, sy2); c.lineTo(sx2, sy2 + r2 * 1.4); c.closePath(); c.fill(); c.globalAlpha = 1; } }
+      return;
+    }
     c.fillStyle = 'rgba(0,0,0,.28)'; c.beginPath(); c.ellipse(x, p.y + 5, 8, 3, 0, 0, TAU); c.fill();
-    if (p.gold) { if (!drawIcon(c, 'gold_bars', x, y - 2, 24)) { c.fillStyle = '#ffd23f'; c.fillRect(x - 8, y - 4, 16, 8); } }
+    if (p.gem) { c.fillStyle = '#d93a55'; c.beginPath(); c.moveTo(x, y - 7); c.lineTo(x + 6, y); c.lineTo(x, y + 6); c.lineTo(x - 6, y); c.closePath(); c.fill(); }
+    else if (p.gold) { if (!drawIcon(c, 'gold_bars', x, y - 2, 24)) { c.fillStyle = '#ffd23f'; c.fillRect(x - 8, y - 4, 16, 8); } }
     else {
-      var kind = pickupTier(p.v);
+      var kind = nm;
       if (!billCv) makeBill();
-      if (kind === 'bill') drawBillAt(c, x, y, p.rot * 0.35 - 0.2, 0.52);
-      else if (kind === 'fan') { var n = p.v >= 5 ? 3 : 2; for (var i = 0; i < n; i++) drawBillAt(c, x + (i - (n - 1) / 2) * 3, y - i * 0.8, (i - (n - 1) / 2) * 0.42 + p.rot * 0.05, 0.5); }
-      else if (kind === 'stack') { if (!drawIcon(c, 'cash_stack', x, y - 2, 25)) drawBillAt(c, x, y, 0, 0.6); }
+      if (kind === 'note_single') drawBillAt(c, x, y, p.rot * 0.35 - 0.2, 0.52);
+      else if (kind === 'note_fan') { var n = p.v >= 5 ? 3 : 2; for (var i = 0; i < n; i++) drawBillAt(c, x + (i - (n - 1) / 2) * 3, y - i * 0.8, (i - (n - 1) / 2) * 0.42 + p.rot * 0.05, 0.5); }
+      else if (kind === 'note_bundle' || kind === 'note_stack') { if (!drawIcon(c, 'cash_stack', x, y - 2, 25)) drawBillAt(c, x, y, 0, 0.6); }
       else { if (!drawIcon(c, 'money_bag', x, y - 3, 28)) drawBillAt(c, x, y, 0, 0.7); }
     }
-    // sparkle
-    var ph = (S.tickT * 0.9 + p.rot) % 1.6;
-    if (ph < 0.3) { var a = sin(ph / 0.3 * Math.PI), sx = x + 6 * cos(p.rot * 5), sy = y - 4 + 3 * sin(p.rot * 7), r = 3.2 * a; c.globalAlpha = a; c.fillStyle = '#fff8d0'; c.beginPath(); c.moveTo(sx - r, sy); c.lineTo(sx, sy - r * 1.4); c.lineTo(sx + r, sy); c.lineTo(sx, sy + r * 1.4); c.closePath(); c.fill(); c.globalAlpha = 1; }
   }
   // ---- bullets: brass tracer + trail, plasma bolt (animated), tinted enemy tracer with glow; capsule fallback
   // trail + bullet (+ glow for enemy shots) are baked once into one offscreen sprite per (kind, trail, scale) at 2x resolution -> one drawImage per bullet
-  var bspr = {};
+    var bspr = {};
   function bulletSprite(k, tr, sc) {
     var key = k + '|' + tr + '|' + (sc * 100 | 0), o = bspr[key]; if (o) return o;
-    var tf = k === 2 ? tinted('bullet_trail', 0, '#ff4a1c', 0.85) : fxFrame('bullet_trail', tr), bf = k === 2 ? tinted('bullet', 0, '#ff3a1a', 0.6) : fxFrame('bullet', 0);
-    if (!tf || !bf) return null;   // images not loaded yet -> capsule fallback this frame
-    var O = 2, ts = sc * 0.78, tw = tf.d.w * ts, th = tf.d.h * ts, bw = bf.d.w * sc, bh = bf.d.h * sc, pad = 6;
-    var W2 = Math.ceil(max(tw, bw) + pad * 2), H2 = Math.ceil(max(th, bh, 22) + pad), cv2 = document.createElement('canvas'); cv2.width = W2 * O; cv2.height = H2 * O;
-    var g = cv2.getContext('2d'); g.scale(O, O); var hx = W2 - pad, hy = H2 / 2;
-    if (k === 2) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.6; g.drawImage(getGlow(), hx - 11, hy - 11, 22, 22); g.globalCompositeOperation = 'source-over'; }
-    g.globalAlpha = 0.8; g.drawImage(tf.im, hx - tf.d.pivot[0] * ts, hy - tf.d.pivot[1] * ts, tw, th);
-    g.globalAlpha = 1; g.drawImage(bf.im, hx - bf.d.pivot[0] * sc, hy - bf.d.pivot[1] * sc, bw, bh);
+    var bf = tr === 0 ? fxFrame('x_bullet_small', 0) : fxFrame('x_bullet_long', tr - 1); if (!bf) return null;   // images not loaded yet -> capsule fallback this frame
+    var O = 2, bw = bf.d.w * sc, bh = bf.d.h * sc, pad = 3, W2 = Math.ceil(bw + pad * 2), H2 = Math.ceil(bh + pad * 2), cv2 = document.createElement('canvas'); cv2.width = W2 * O; cv2.height = H2 * O;
+    var g = cv2.getContext('2d'); g.scale(O, O); var hx = W2 - pad - 1, hy = H2 / 2;
+    g.drawImage(bf.im, hx - bf.d.pivot[0] * sc, hy - bf.d.pivot[1] * sc, bw, bh);
     return (bspr[key] = { cv: cv2, hx: hx, hy: hy, w: W2, h: H2 });
   }
   function drawBullet(c, b) {
     var k = b.kind, a = b.ang, o, f;
-    if (k === 1) { f = fxFrame('plasma', (b.age * 14) | 0); if (f) { drawFx(c, f, b.x, b.y, a, 0.24); return; } }
-    else if ((o = bulletSprite(k, b.tr, b.sc))) {
+    if (k === 1) { f = fxFrame('x_plasma', (b.age * 14) | 0) || fxFrame('plasma', (b.age * 14) | 0); if (f) { drawFx(c, f, b.x, b.y, a, f.d.file.indexOf('fx2') >= 0 ? 0.5 : 0.24); return; } }
+    else if (k === 2 && (f = fxFrame('x_bullet_enemy', (b.age * 14) | 0))) { drawFx(c, f, b.x, b.y, a, b.sc); return; }
+    else if (k === 0 && (o = bulletSprite(k, b.tr, b.sc))) {
       c.save(); c.translate(b.x, b.y); c.rotate(a); c.drawImage(o.cv, -o.hx, -o.hy, o.w, o.h); c.restore(); return;
     }
     // fallback: simple capsule
@@ -1089,7 +1154,7 @@ window.G = window.G || {};
     }
     // y-sorted entities: props, enemies, hero
     dlN = 0;
-    for (i = 0; i < props.length; i++) { var pp = props[i]; if (pp.x + 260 > cam.l && pp.x - 260 < cam.l + VW && pp.y - 260 < cam.t + VH && pp.y + 30 > cam.t) dl(pp.y, 0, pp); }
+    for (i = 0; i < props.length; i++) { var pp = props[i]; var rh = pp.st ? max(260, pp.dw / 2 + 10) : 260, rv = pp.st ? max(260, pp.dh) : 260; if (pp.x + rh > cam.l && pp.x - rh < cam.l + VW && pp.y - rv < cam.t + VH && pp.y + 30 > cam.t) dl(pp.y, 0, pp); }
     for (i = 0; i < enemies.length; i++) { var e = enemies[i]; if (e.active && vis(e.x, e.y, 90 + e.r)) dl(e.y + e.r + (e.boss ? 0.5 : 0), 1, e); }
     dl(hero.y + hero.r, 2, hero);
     drawList.length = dlN; drawList.sort(dlSort);
@@ -1219,7 +1284,7 @@ window.G = window.G || {};
       return c;
     },
     skipWave: function () { if (S && S.phase === 'fight') { if (S.wave >= S.ch.waves) { S.waveT = S.waveLen; } endWave(); } },
-    drop: function (dx, dy, v, gold) { var p = null; for (var i = 0; i < pickups.length; i++) if (!pickups[i].active) { p = pickups[i]; break; } if (p) fillPickup(p, hero.x + dx, hero.y + dy, 0, 0, v, !!gold); },
+    drop: function (dx, dy, v, gold, gem, big) { var p = null; for (var i = 0; i < pickups.length; i++) if (!pickups[i].active) { p = pickups[i]; break; } if (p) fillPickup(p, hero.x + dx, hero.y + dy, 0, 0, v, !!gold, gem, big); },
     setWeapon: function (base, tier) { S.weapon.base = base; S.weapon.tier = tier | 0; S.weapon.mag = C.WEAPONS[effId(S.weapon)].mag; hero.weaponId = effId(S.weapon); syncWeaponsPub(); },
     freezeEnemies: function (b) { for (var i = 0; i < enemies.length; i++) if (enemies[i].active) enemies[i].spd = b ? 0 : enemies[i].def.spd; },
     setWave: function (n) { if (S) S.wave = n; },
@@ -1236,7 +1301,7 @@ window.G = window.G || {};
     snapshot: function () {
       var es = [], ps = [], bs = [], i;
       for (i = 0; i < enemies.length; i++) { var e = enemies[i]; if (e.active) es.push({ x: e.x, y: e.y, r: e.r, kind: e.kind, hp: e.hp, boss: e.boss }); }
-      for (i = 0; i < pickups.length; i++) if (pickups[i].active) ps.push({ x: pickups[i].x, y: pickups[i].y, gold: pickups[i].gold });
+      for (i = 0; i < pickups.length; i++) if (pickups[i].active) ps.push({ x: pickups[i].x, y: pickups[i].y, gold: pickups[i].gold, gem: pickups[i].gem });
       for (i = 0; i < bullets.length; i++) if (bullets[i].active && !bullets[i].friendly) bs.push({ x: bullets[i].x, y: bullets[i].y, vx: bullets[i].vx, vy: bullets[i].vy });
       return { cam: { x: cam.x, y: cam.y, l: cam.l, t: cam.t }, hero: { x: hero.x, y: hero.y, hp: hero.hp, maxHp: hero.maxHp, r: hero.r }, enemies: es, pickups: ps, bullets: bs, phase: S.phase, wave: S.wave, cash: S.cash, weapons: [{ id: effId(S.weapon), base: S.weapon.base, tier: S.weapon.tier }], chapter: S.ch.id, stats: S.st, bag: S.bag, offers: S.offers };
     },

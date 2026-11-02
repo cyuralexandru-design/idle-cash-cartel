@@ -130,8 +130,8 @@ window.G = window.G || {};
   C.START_WEAPON = 'pistol';
   C.RECYCLE_REFUND = 0.25;      // passive items only
   C.BULLET_R = 3.5;
-  C.BULLET_SCALE = 0.3;          // tracer sprite scale (bullet_0 is 56px long)
-  C.ENEMY_BULLET_SCALE = 0.36;
+  C.BULLET_SCALE = 0.4;          // tracer sprite scale (bullet_0 is 56px long)
+  C.ENEMY_BULLET_SCALE = 0.4;
   C.ENEMY_BULLET_R = 5;
 
   // ---------- passive items (shop) ----------
@@ -163,8 +163,8 @@ window.G = window.G || {};
     thug_bat:        { hp: 30,  spd: 74,  dmg: 10, r: 13, val: 2, color: '#e67e22', sides: 4, melee: true,  atkCd: 0.8 },
     gunman_smg:      { hp: 22,  spd: 62,  dmg: 5,  r: 11, val: 2, color: '#1abc9c', sides: 4, rot: 0.785, keep: 230, burst: 3, burstGap: 0.12, fireCd: 2.0, bspd: 230, goldChance: 0.01 },
     bruiser_shotgun: { hp: 120, spd: 40,  dmg: 4,  r: 20, val: 5, color: '#8d99a6', sides: 6, melee: true, atkCd: 1.0, contact: 10, shotRange: 210, pellets: 5, spread: 0.5, fireCd: 2.6, bspd: 220, goldChance: 0.06 },
-    mini_boss:       { hp: 1300, spd: 56, dmg: 7,  r: 28, val: 5, color: '#c0392b', sides: 8, boss: true, name: 'Mini Boss', contact: 14, gold: 2, drops: 8, patterns: ['spread', 'charge', 'summon'], summon: 3, pellets: 9, spread: 0.9, bspd: 240 },
-    boss_leader:     { hp: 3800, spd: 52, dmg: 8,  r: 34, val: 8, color: '#b3202a', sides: 10, boss: true, name: 'The Boss', contact: 18, gold: 5, drops: 14, patterns: ['spread', 'charge', 'summon', 'ring'], summon: 5, pellets: 12, spread: 1.1, bspd: 260 }
+    mini_boss:       { gems: 0, gemsSmall: 2, hp: 1300, spd: 56, dmg: 7,  r: 28, val: 5, color: '#c0392b', sides: 8, boss: true, name: 'Mini Boss', contact: 14, gold: 2, drops: 8, patterns: ['spread', 'charge', 'summon'], summon: 3, pellets: 9, spread: 0.9, bspd: 240 },
+    boss_leader:     { gems: 1, gemsSmall: 2, hp: 3800, spd: 52, dmg: 8,  r: 34, val: 8, color: '#b3202a', sides: 10, boss: true, name: 'The Boss', contact: 18, gold: 5, drops: 14, patterns: ['spread', 'charge', 'summon', 'ring'], summon: 5, pellets: 12, spread: 1.1, bspd: 260 }
   };
   C.BOSS_MOVE_TIME = 1.8;
   C.BOSS_TELEGRAPH = 0.6;
@@ -178,7 +178,8 @@ window.G = window.G || {};
   C.BAG_RESPAWN_MAX = 40;        // max notes respawned from the bag each wave
   C.GOLD_BAR_XP = 3;
   // pickup visuals by value: single bill < fan of bills < bundle (cash_stack icon) < money bag. Gold = gold_bars icon.
-  C.PICKUP_TIERS = [{ min: 0, kind: 'bill' }, { min: 3, kind: 'fan' }, { min: 8, kind: 'stack' }, { min: 30, kind: 'bag' }];
+  C.PICKUP_TIERS = [{ min: 0, kind: 'note_single' }, { min: 3, kind: 'note_fan' }, { min: 8, kind: 'note_bundle' }, { min: 20, kind: 'note_stack' }, { min: 60, kind: 'cash_bag' }, { min: 160, kind: 'cash_case' }];
+  C.GEM_VALUE_SMALL = 1; C.GEM_VALUE_BIG = 3;   // gems dropped by bosses (result.gems -> economy applyRaidResult)
   C.CASH_MULT = 2.5;            // cash per note value (XP per note = value)
   C.BOSS_WIN_CASH = 0;           // optional bonus cash on win
 

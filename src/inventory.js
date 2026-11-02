@@ -71,8 +71,18 @@ window.G = window.G || {};
     equippedItem: function (slot) { var id = inv().equipped[slot]; return id ? get(id) : null; },
     iconOf: function (it) { var d = SLOT_DEFS[it.slot], e = d.items[it.base % d.items.length]; return e[1]; },
     nameOf: function (it) { var d = SLOT_DEFS[it.slot]; return d.items[it.base % d.items.length][0]; },
+    // icon file path for a gear slot+rarity from G_MANIFEST.items3, else null (weapon: use G_MANIFEST.weapons[id].side)
+    iconFor: function (slot, rarity) {
+      var m = window.G_MANIFEST && G_MANIFEST.items3, r = typeof rarity === 'number' ? rar(rarity).id : rarity;
+      var e = m && m[slot] && m[slot][r]; return e ? e.file : null;
+    },
     iconUri: function (key) { return key.indexOf('svg:') === 0 ? svgUri(key.slice(4)) : null; },
-    iconFiles: function () {   // manifest icon keys used by items + chests (for preload)
+    iconFiles: function () {   // all 30 items3 gear icon paths (preload)
+      var out = [], m = (window.G_MANIFEST && G_MANIFEST.items3) || {};
+      SLOTS.forEach(function (s) { RARITIES.forEach(function (r) { var f = API.iconFor(s, r.id); if (f) out.push(f); }); });
+      return out;
+    },
+    iconKeys: function () {   // legacy: manifest icon keys used by items + chests   // manifest icon keys used by items + chests (for preload)
       var out = []; SLOTS.forEach(function (s) { SLOT_DEFS[s].items.forEach(function (e) { if (e[1].indexOf('svg:') !== 0 && out.indexOf(e[1]) < 0) out.push(e[1]); }); });
       Object.keys(CHESTS).forEach(function (k) { out.push(CHESTS[k].icon); });
       return out;
