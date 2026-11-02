@@ -31,7 +31,8 @@ window.G = window.G || {};
     '.arena-chips{display:flex;flex-wrap:wrap;gap:.3em;font-size:.8em}',
     '.arena-chip{background:#2d3138;border-radius:1em;padding:.2em .6em;cursor:pointer}',
     '.arena-toast{position:absolute;left:50%;top:12%;transform:translateX(-50%);background:#e8a317;color:#14161a;font-weight:800;padding:.5em 1em;border-radius:1em;z-index:30;font-family:system-ui,sans-serif;pointer-events:none}',
-    '.arena-pause-box{margin:auto;display:flex;flex-direction:column;gap:.8em;width:70%}'
+    '.arena-pause-box{margin:auto;display:flex;flex-direction:column;gap:.8em;width:70%}',
+    '.arena-confirm{display:flex;flex-direction:column;gap:.8em}.arena-confirm[hidden],.arena-main[hidden]{display:none}'
   ].join('');
 
   var canvas = null, layer = null, toastEl = null, resizeFn = null;
@@ -192,8 +193,19 @@ window.G = window.G || {};
       var box = el('div', 'arena-pause-box'); L.appendChild(box);
       box.appendChild(el('div', 'arena-title', 'PAUSED'));
       var r = el('button', 'arena-btn', 'Resume'); r.setAttribute('data-act', 'resume'); r.onclick = function () { sfx('click'); act.resume(); };
-      var q = el('button', 'arena-btn arena-sec', 'Abandon run'); q.setAttribute('data-act', 'quit'); q.onclick = function () { sfx('click'); act.quit(); };
-      box.appendChild(r); box.appendChild(q);
+      var st = el('button', 'arena-btn arena-sec', 'Settings'); st.setAttribute('data-act', 'settings');
+      st.onclick = function () { sfx('click'); if (G.settings) G.settings.open(); };
+      var q = el('button', 'arena-btn arena-sec', 'Quit raid'); q.setAttribute('data-act', 'quit');
+      var conf = el('div', 'arena-confirm'); conf.hidden = true;
+      conf.appendChild(el('div', 'arena-sub', 'Quit this raid? You keep the cash and loot collected so far, but the run ends.'));
+      var cy = el('button', 'arena-btn arena-lock arena-on', 'Yes, quit raid'); cy.setAttribute('data-act', 'quit-yes');
+      var cn = el('button', 'arena-btn arena-sec', 'Keep fighting'); cn.setAttribute('data-act', 'quit-no');
+      conf.appendChild(cy); conf.appendChild(cn);
+      q.onclick = function () { sfx('click'); conf.hidden = false; box.querySelectorAll('.arena-main').forEach(function (b) { b.hidden = true; }); };
+      cn.onclick = function () { sfx('click'); conf.hidden = true; box.querySelectorAll('.arena-main').forEach(function (b) { b.hidden = false; }); };
+      cy.onclick = function () { sfx('click'); act.quit(); };
+      [r, st, q].forEach(function (b) { b.classList.add('arena-main'); box.appendChild(b); });
+      box.appendChild(conf);
     },
     helpers: { initials: initials }
   };

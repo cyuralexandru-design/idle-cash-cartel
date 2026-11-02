@@ -62,34 +62,43 @@ window.G = window.G || {};
   function gfind(m, id) { var g = m.ground || []; for (var i = 0; i < g.length; i++) if (g[i].id === id) return im(g[i]); return null; }
 
   // ---------- layout ----------
-  var FH_TOP = 262, SW = 330;
+  // World (default 1000 x 1500): facade wall top / sidewalk / road (lanes run along Y) / sidewalk / facade wall bottom (docklands: quay),
+  // plus facade side walls + sidewalks on BOTH left and right, so buildings are never more than ~300px away.
+  var PROF = {
+    docklands: { FH: 230, SWt: 170, SWb: 110, sideWall: 105, sideSW: 85, roadTile: 'seam_paving', roadScale: .62, swTile: 'seam_sidewalk', swScale: 1,
+      grade: [['multiply', 'rgb(150,175,205)', .85], ['overlay', 'rgb(30,70,130)', .22]], lamp: '175,205,255', cars: ['#3d5a78', '#7a8590', '#a84a2c', '#2b3138'], kerbGut: true },
+    soho: { FH: 235, SWt: 150, SWb: 150, sideWall: 105, sideSW: 175, roadTile: 'seam_asphalt', roadScale: 1, swTile: 'seam_sidewalk', swScale: 1,
+      grade: [['multiply', 'rgb(215,185,225)', .5], ['overlay', 'rgb(90,20,100)', .1]], lamp: '255,90,150', cars: ['#7b2a4a', '#1f6f73', '#2a2438', '#b0b0c0'], kerbGut: true },
+    canary: { FH: 245, SWt: 185, SWb: 185, sideWall: 105, sideSW: 105, roadTile: 'seam_asphalt', roadScale: 1, swTile: 'seam_paving', swScale: .6,
+      grade: [['screen', 'rgb(70,100,140)', .26], ['overlay', 'rgb(120,170,230)', .2]], lamp: '190,220,255', cars: ['#d8dde4', '#1c2430', '#3a6fb0', '#8a919c'], kerbGut: false }
+  };
   function plan(ch, W, H, seed) {
     var key = ch + '|' + W + '|' + H + '|' + seed;
     if (cache[key]) return cache[key];
     var m = man(ch); if (!m || !isUsable(m)) return null;
+    var P = PROF[ch] || PROF.docklands;
     var rw = rngFor(seed, ch + 'walls'), rp = rngFor(seed, ch + 'props'), rd = rngFor(seed, ch + 'decals');
-    var L = { ch: ch, W: W, H: H, seed: seed, m: m };
+    var L = { ch: ch, W: W, H: H, seed: seed, m: m, P: P };
     var quay = ch === 'docklands' && m.quay && im(m.quay[0]);
-    L.FHt = FH_TOP; L.FHb = quay ? Math.round(W / Math.ceil(W / 540) * (m.quay[0].h / m.quay[0].w)) : FH_TOP;
-    L.quay = !!quay;
-    L.SW = SW;
+    L.FHt = P.FH; L.FHb = quay ? Math.round(W / Math.ceil(W / 540) * (m.quay[0].h / m.quay[0].w)) : P.FH;
+    L.quay = !!quay; L.SWt = P.SWt; L.SWb = P.SWb; L.sideWall = P.sideWall;
     var cs = m.sidewalk.curbStraight.filter(Boolean);
     L.curbS = 0.9; L.curbH = Math.round(cs[0].h * L.curbS);
-    L.y1t = L.FHt + SW;               // road starts (top curb bottom edge)
-    L.y1b = H - L.FHb - SW;           // road ends   (bottom curb top edge)
-    L.roadMid = (L.y1t + L.y1b) / 2; L.roadH = L.y1b - L.y1t;
-    L.xC = Math.round(W * rr(rd, 0.38, 0.62));   // zebra crossing x
-    L.cw = 170;                                  // crossing half-ish clear width
-    // facade walls
+    L.y1t = L.FHt + L.SWt; L.y1b = H - L.FHb - L.SWb;
+    L.x0 = L.sideWall + P.sideSW; L.x1 = W - L.sideWall - P.sideSW;
+    L.roadMid = (L.y1t + L.y1b) / 2; L.roadH = L.y1b - L.y1t; L.roadW = L.x1 - L.x0; L.xMid = (L.x0 + L.x1) / 2;
+    L.yC = Math.round(L.y1t + L.roadH * rr(rd, .22, .3));   // the one small zebra crossing
+    L.spawn = { x: W / 2, y: H / 2 + 60 };
     L.wallTop = wall(m, W, L.FHt, rw, ch);
     if (!quay) L.wallBot = wall(m, W, L.FHb, rw, ch);
-    // props
+    L.wallL = wall(m, H, L.sideWall, rw, ch); L.wallR = wall(m, H, L.sideWall, rw, ch);
     L.props = []; L.solids = [];
     placeProps(L, rp);
     L.props.sort(function (a, b) { return a.y - b.y; });
-    // solids: walls + prop footprints
     L.solids.push({ x: 0, y: 0, w: W, h: L.FHt - 30, kind: 'wall' });
     L.solids.push({ x: 0, y: quay ? H - L.FHb + 50 : H - L.FHb + 12, w: W, h: quay ? L.FHb - 50 : L.FHb - 12, kind: 'wall' });
+    L.solids.push({ x: 0, y: 0, w: L.sideWall - 14, h: H, kind: 'wall' });
+    L.solids.push({ x: W - L.sideWall + 14, y: 0, w: L.sideWall - 14, h: H, kind: 'wall' });
     L.props.forEach(function (p) {
       if (!p.solid) return;
       if (p.posts) { p.posts.forEach(function (q) { L.solids.push({ x: p.x + q - 9, y: p.y - 14, w: 18, h: 14, kind: 'prop', id: p.id }); }); return; }
@@ -100,20 +109,19 @@ window.G = window.G || {};
 
   function wall(m, W, FH, rng, ch) {
     var pool = m.facades.filter(function (f) { return im(f); });
-    var best = null;
+    var best = null, wsum = 0; pool.forEach(function (f) { wsum += (f.weight || 1); });
     for (var t = 0; t < 400; t++) {
       var seq = [], tot = 0, last = null, count = {};
-      var wsum = 0; pool.forEach(function (f) { wsum += (f.weight || 1); });
-      while (tot < W - 40 && seq.length < 14) {
+      while (tot < W - 40 && seq.length < 22) {
         var r = rng() * wsum, f = pool[0];
         for (var i = 0; i < pool.length; i++) { r -= (pool[i].weight || 1); if (r <= 0) { f = pool[i]; break; } }
         if (f === last) continue;
-        if ((count[f.id] || 0) >= 2) continue;
+        if ((count[f.id] || 0) >= 3) continue;
         var w = f.w * FH / f.h;
         seq.push({ f: f, w: w }); tot += w; last = f; count[f.id] = (count[f.id] || 0) + 1;
       }
       var over = tot - W; if (over < -5) continue;
-      var score = Math.abs(over - 15) + (seq.length < 4 ? 50 : 0) + rng() * 4;
+      var score = Math.abs(over - 15) + (seq.length < 3 ? 50 : 0) + rng() * 4;
       if (!best || score < best.score) best = { seq: seq, tot: tot, score: score };
     }
     if (!best) { var f0 = pool[0]; best = { seq: [{ f: f0, w: f0.w * FH / f0.h }], tot: f0.w * FH / f0.h }; }
@@ -123,104 +131,199 @@ window.G = window.G || {};
     return out;
   }
 
+  // ---------- procedural road sprites (cars, cones, barriers, bags) ----------
+  var spriteCache = {};
+  function rrect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+  function shade(hex, k) { var n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255; function f(v) { return Math.max(0, Math.min(255, Math.round(v * k))); } return 'rgb(' + f(r) + ',' + f(g) + ',' + f(b) + ')'; }
+  // top-down-ish car, nose up. w x h (sprite includes a little side wall below the roofline for depth)
+  function carSprite(color, van, glass) {
+    var key = 'car' + color + (van ? 'v' : '') + glass; if (spriteCache[key]) return spriteCache[key];
+    var w = van ? 92 : 82, h = van ? 188 : 160, c = cv(w, h), x = c.getContext('2d');
+    var bx = 8, bw = w - 16, by = 8, bh = h - 22;
+    x.fillStyle = 'rgba(0,0,0,.45)'; rrect(x, bx + 2, by + 12, bw, bh, 16); x.fill();                 // underbody / depth
+    var g = x.createLinearGradient(bx, 0, bx + bw, 0); g.addColorStop(0, shade(color, .7)); g.addColorStop(.5, shade(color, 1.18)); g.addColorStop(1, shade(color, .72));
+    x.fillStyle = g; rrect(x, bx, by, bw, bh, 16); x.fill();
+    x.strokeStyle = 'rgba(0,0,0,.55)'; x.lineWidth = 2; x.stroke();
+    var ry = van ? by + 26 : by + 44, rh = van ? bh - 44 : bh - 98;                                   // cabin
+    x.fillStyle = glass || 'rgba(14,22,34,.92)'; rrect(x, bx + 6, ry, bw - 12, rh, 10); x.fill();
+    var rg = x.createLinearGradient(0, ry, 0, ry + rh); rg.addColorStop(0, shade(color, 1.25)); rg.addColorStop(1, shade(color, .95));
+    x.fillStyle = rg; rrect(x, bx + 9, ry + (van ? 40 : 22), bw - 18, rh - (van ? 46 : 40), 8); x.fill();      // roof
+    x.fillStyle = 'rgba(255,255,255,.14)'; rrect(x, bx + 13, ry + (van ? 44 : 25), 9, rh - (van ? 56 : 52), 4); x.fill();
+    x.fillStyle = 'rgba(255,236,170,.95)'; x.fillRect(bx + 4, by + 2, 11, 5); x.fillRect(bx + bw - 15, by + 2, 11, 5);          // headlights
+    x.fillStyle = 'rgba(255,40,40,.95)'; x.fillRect(bx + 4, by + bh - 7, 11, 5); x.fillRect(bx + bw - 15, by + bh - 7, 11, 5);   // tail lights
+    x.fillStyle = '#0a0b0e'; [[ry - 6], [ry + rh - 18]].forEach(function (q) { x.fillRect(1, q[0], 8, 24); x.fillRect(w - 9, q[0], 8, 24); });  // wheels
+    return (spriteCache[key] = c);
+  }
+  function rot90(src) { var c = cv(src.height, src.width), x = c.getContext('2d'); x.translate(0, c.height); x.rotate(-Math.PI / 2); x.drawImage(src, 0, 0); return c; }
+  function coneSprite() {
+    if (spriteCache.cone) return spriteCache.cone; var c = cv(26, 36), x = c.getContext('2d');
+    x.fillStyle = '#16181c'; rrect(x, 2, 28, 22, 6, 2); x.fill();
+    x.fillStyle = '#ff6a1a'; x.beginPath(); x.moveTo(13, 2); x.lineTo(21, 29); x.lineTo(5, 29); x.closePath(); x.fill();
+    x.fillStyle = '#f2f2ee'; x.beginPath(); x.moveTo(11, 12); x.lineTo(15, 12); x.lineTo(17, 19); x.lineTo(9, 19); x.closePath(); x.fill();
+    return (spriteCache.cone = c);
+  }
+  function barrierSprite() {
+    if (spriteCache.bar) return spriteCache.bar; var c = cv(110, 44), x = c.getContext('2d');
+    x.fillStyle = 'rgba(0,0,0,.4)'; rrect(x, 4, 14, 102, 28, 4); x.fill();
+    x.fillStyle = '#e9e9e4'; rrect(x, 4, 4, 102, 26, 4); x.fill();
+    x.save(); rrect(x, 4, 4, 102, 26, 4); x.clip(); x.fillStyle = '#d6301f';
+    for (var i = -2; i < 9; i++) { x.beginPath(); x.moveTo(i * 16, 30); x.lineTo(i * 16 + 10, 30); x.lineTo(i * 16 + 26, 4); x.lineTo(i * 16 + 16, 4); x.closePath(); x.fill(); } x.restore();
+    x.fillStyle = '#222'; x.fillRect(14, 30, 6, 10); x.fillRect(90, 30, 6, 10);
+    return (spriteCache.bar = c);
+  }
+  function bagSprite(k) {
+    var key = 'bag' + k; if (spriteCache[key]) return spriteCache[key]; var c = cv(30, 24), x = c.getContext('2d');
+    x.fillStyle = 'rgba(0,0,0,.35)'; x.beginPath(); x.ellipse(15, 19, 12, 4, 0, 0, 6.3); x.fill();
+    x.fillStyle = k ? '#59616e' : '#3d5a4e'; x.beginPath(); x.ellipse(15, 13, 10, 7, .2, 0, 6.3); x.fill();
+    x.fillStyle = 'rgba(180,200,230,.25)'; x.beginPath(); x.ellipse(11, 8, 4, 2.5, -.4, 0, 6.3); x.fill();
+    x.fillStyle = k ? '#59616e' : '#3d5a4e'; x.fillRect(13, 3, 4, 4);
+    return (spriteCache[key] = c);
+  }
+
   function placeProps(L, rng) {
-    var m = L.m, W = L.W, H = L.H;
+    var m = L.m, W = L.W, H = L.H, P = L.P, imgsDef = {};
     var byId = {}; (m.props || []).forEach(function (p) { if (im(p)) byId[p.id] = p; });
-    var rows = { 'curbT': [], 'curbB': [], 'wallT': [], 'wallB': [], 'yardT': [], 'yardB': [] };
-    var yCurbT = L.y1t - L.curbH - 10, yCurbB = L.y1b + L.curbH + 38;
-    var yWallT = L.FHt + 112, yWallB = H - L.FHb - 22;
-    function free(row, x, hw) {
-      if (x - hw < 30 || x + hw > W - 30) return false;
-      var r = rows[row]; for (var i = 0; i < r.length; i++) if (Math.abs(r[i].x - x) < r[i].hw + hw + 14) return false;
+    var topRow = [], botRow = [], lRow = [], rRow = [], roadRow = [];
+    var rows = { curbT: topRow, wallT: topRow, yardT: topRow, curbB: botRow, wallB: botRow, yardB: botRow };
+    var xLo = L.sideWall + 36, xHi = W - L.sideWall - 36;
+    var yCurbT = L.y1t - L.curbH - 8, yCurbB = L.y1b + L.curbH + 36;
+    var yWallT = L.FHt + 66, yWallB = H - L.FHb - 12;
+    function free(row, x, hw, y) {
+      var r = rows[row]; if (x - hw < xLo || x + hw > xHi) return false;
+      for (var i = 0; i < r.length; i++) if (Math.abs(r[i].x - x) < r[i].hw + hw + 12) return false;
       return true;
     }
-    function inCross(x, hw, pad) { return Math.abs(x - L.xC) < L.cw / 2 + pad + hw; }
     function mk(id, x, y, row, opt) {
       var d = byId[id]; if (!d) return null;
       var w = d.w * d.scale, h = d.h * d.scale;
       var p = { id: id, img: imgs[d.file], x: Math.round(x), y: Math.round(y), w: w, h: h, dx: -w / 2, dy: -d.anchor[1] * d.scale,
         footprint: d.footprint.slice(), solid: d.solid && !(opt && opt.nosolid), zone: d.zone, row: row, hw: w / 2 };
       if (opt && opt.flip) p.flip = true;
-      rows[row].push(p); L.props.push(p); return p;
+      (rows[row] || (row === 'L' ? lRow : rRow)).push(p); L.props.push(p); return p;
     }
-    function scatter(id, row, y0, jit, n, pad, avoidCross, tries) {
+    function scatter(id, row, y0, jit, n, pad, tries) {
       var d = byId[id]; if (!d) return;
       var hw = d.w * d.scale / 2, c = 0;
       for (var t = 0; t < (tries || 60) && c < n; t++) {
-        var x = rr(rng, 60 + hw, W - 60 - hw);
+        var x = rr(rng, xLo + hw, xHi - hw);
         if (!free(row, x, hw + (pad || 0))) continue;
-        if (avoidCross !== false && inCross(x, hw, 50)) continue;
         mk(id, x, y0 + rr(rng, 0, jit), row); c++;
       }
     }
-    // --- crossing: traffic lights + bollards on both sides
-    [['T', yCurbT, 1], ['B', yCurbB, -1]].forEach(function (s) {
-      var row = 'curb' + s[0];
-      [-1, 1].forEach(function (sd) {
-        var xx = L.xC + sd * (L.cw / 2 + 46);
-        if (s[0] === 'T' && sd === 1 || s[0] === 'B' && sd === -1) mk('prop_traffic_light', xx, s[1] - 6, row);
-        else {
-          for (var k = 0; k < 3; k++) mk('prop_bollard', xx + sd * (k * 54) - (k === 0 ? 0 : 0), s[1] + 2, row);
-        }
-      });
+    // crossing: traffic lights at the curb on both sides of the zebra
+    var xs = [L.x0 - 36, L.x1 + 36];
+    mk('prop_traffic_light', L.x0 + 30, yCurbT, 'curbT'); mk('prop_traffic_light', L.x1 - 30, yCurbB, 'curbB');
+    // lamps along the top/bottom curb
+    [['T', yCurbT, 0], ['B', yCurbB, 200]].forEach(function (s) {
+      for (var x = xLo + 90 + s[2] + rr(rng, 0, 40); x < xHi - 60; x += 400 + rr(rng, -40, 50)) if (free('curb' + s[0], x, 22)) mk('prop_lamp', x, s[1] + 4, 'curb' + s[0]);
     });
-    // --- lamps along the curb, alternating offsets
-    [['T', yCurbT, 0], ['B', yCurbB, 240]].forEach(function (s) {
-      for (var x = 150 + s[2] + rr(rng, 0, 80); x < W - 120; x += 470 + rr(rng, -50, 70)) {
-        if (!inCross(x, 10, 120)) if (free('curb' + s[0], x, 22)) mk('prop_lamp', x, s[1] + 4, 'curb' + s[0]);
-      }
-    });
-    // --- railings (continuous stretch of 2-3 pieces) on one sidewalk side each
     var rail = byId.prop_railing || byId.prop_glass_railing;
-    if (rail) {
+    if (rail && L.ch !== 'soho') {
       [['T', yCurbT], ['B', yCurbB]].forEach(function (s, si) {
-        var n = 2 + Math.floor(rng() * 2), w = rail.w * rail.scale * 0.97, tot = n * w;
+        var n = 2, w = rail.w * rail.scale * 0.97, tot = n * w;
         for (var t = 0; t < 40; t++) {
-          var x0 = rr(rng, 70, W - 70 - tot), ok = true;
-          for (var k = 0; k < n && ok; k++) { var cx = x0 + w * (k + .5); if (!free('curb' + s[0], cx, w / 2 - 6) || inCross(cx, w / 2, 20)) ok = false; }
+          var x0 = rr(rng, xLo + 30, xHi - 30 - tot), ok = true;
+          for (var k = 0; k < n && ok; k++) if (!free('curb' + s[0], x0 + w * (k + .5), w / 2 - 6)) ok = false;
           if (!ok) continue;
           for (var k = 0; k < n; k++) mk(rail.id, x0 + w * (k + .5), s[1] + (si ? 8 : 4), 'curb' + s[0]);
           break;
         }
       });
     }
-    // --- bus stop (one per sidewalk, opposite ends), tube sign
-    scatter('prop_bus_stop', 'curbT', yCurbT, 4, 1, 30);
-    scatter('prop_bus_stop', 'curbB', yCurbB, 4, 1, 30);
-    // --- soho arch over the top sidewalk
+    scatter('prop_bus_stop', 'curbT', yCurbT, 4, 1, 20);
+    scatter('prop_bollard', 'curbB', yCurbB, 2, 3, 6, 80);
     if (byId.prop_paifang) {
       var d = byId.prop_paifang, pw = d.w * d.scale;
       for (var t = 0; t < 40; t++) {
-        var ax = rr(rng, 200 + pw / 2, W - 200 - pw / 2);
-        if (Math.abs(ax - L.xC) < pw / 2 + 210) continue;
-        var p = mk('prop_paifang', ax, yCurbT - 4, 'curbT'); if (p) { p.posts = [-pw * 0.36, pw * 0.36]; rows.wallT.push({ x: ax, hw: pw / 2 + 40 }); } break;
+        var ax = rr(rng, xLo + pw / 2, xHi - pw / 2);
+        if (!free('curbT', ax, pw / 2 + 10)) continue;
+        var p = mk('prop_paifang', ax, yCurbT - 4, 'curbT'); if (p) p.posts = [-pw * 0.36, pw * 0.36]; break;
       }
     }
-    // --- wall row furniture
     ['T', 'B'].forEach(function (s) {
-      var row = 'wall' + s[0], y0 = s === 'T' ? yWallT : yWallB;
-      scatter('prop_phone_box', row, y0, 12, 1, 90, true);
-      scatter('prop_post_box', row, y0, 10, 1, 60, true);
-      scatter('prop_bin', row, y0, 14, 2, 90, true);
-      scatter('prop_bench', row, y0, 10, 1, 60, true);
+      var row = 'wall' + s, y0 = s === 'T' ? yWallT : yWallB;
+      scatter('prop_phone_box', row, y0, 6, 1, 50); scatter('prop_post_box', row, y0, 6, 1, 40);
+      scatter('prop_bin', row, y0, 8, 2, 50); scatter('prop_bench', row, y0, 6, 1, 30);
     });
-    scatter('prop_tube_sign', 'wallT', yWallT + 30, 8, 1, 80, true);
-    scatter('prop_neon_dragon', 'wallT', yWallT + 6, 4, 1, 80, true);
-    scatter('prop_neon_dragon', 'wallB', yWallB + 6, 4, 1, 80, true);
-    // --- docklands yard clutter near walls
+    scatter('prop_tube_sign', 'wallT', yWallT + 8, 4, 1, 50);
+    scatter('prop_neon_dragon', 'wallT', yWallT, 4, 1, 40);
+    // docklands: containers/crates/barrels along the wall + quay
     if (byId.prop_container_red) {
       ['T', 'B'].forEach(function (s) {
-        var row = 'yard' + s[0], y0 = s === 'T' ? yWallT + 70 : yWallB - 4;
-        ['prop_container_red', 'prop_container_blue', 'prop_container_yellow'].forEach(function (id, i) { if (s === 'B' || i === 0) scatter(id, row, y0, 10, 1, 40, true); });
-        scatter('prop_crate', row, y0, 12, 2, 20, true);
-        scatter('prop_barrel', row, y0, 12, 2, 20, true);
-        scatter('prop_barrier', row, y0 + 20, 6, 1, 40, true);
+        var row = 'yard' + s, y0 = s === 'T' ? yWallT + 20 : yWallB - 6;
+        ['prop_container_red', 'prop_container_blue', 'prop_container_yellow'].forEach(function (id, i) { if (s === 'B' || i === 0) scatter(id, row, y0, 6, 1, 20); });
+        scatter('prop_crate', row, y0, 8, 1, 14); scatter('prop_barrel', row, y0, 8, 2, 14);
       });
-      scatter('prop_crane', 'yardB', yWallB - 8, 4, 1, 40, true);
-      scatter('prop_gantry', 'yardB', yWallB - 8, 4, 1, 40, true);
+      scatter('prop_crane', 'yardB', yWallB - 4, 4, 1, 20);
     }
-    // clean temp
-    L.props.forEach(function (p) { delete p.hw; });
+    // side sidewalks (left/right): lamps, bins, post box, bollards, bench - x centred on the sidewalk
+    var sideX = [L.sideWall + P.sideSW * .5 - 2, W - L.sideWall - P.sideSW * .5 + 2];
+    [0, 1].forEach(function (sd) {
+      var row = sd ? 'R' : 'L', sx = sideX[sd], arr = sd ? rRow : lRow, y = L.y1t + 40 + rr(rng, 0, 80);
+      var kinds = L.ch === 'soho' ? ['prop_lamp', 'prop_bin', 'prop_bench', 'prop_post_box', 'prop_lamp', 'prop_phone_box'] : ['prop_lamp', 'prop_bollard', 'prop_bin', 'prop_lamp', 'prop_bench', 'prop_post_box'];
+      var gap = L.ch === 'soho' ? 170 : 190, i = sd * 2;
+      for (; y < L.y1b - 70; y += gap + rr(rng, -20, 50)) {
+        var id = kinds[(i++) % kinds.length]; if (!byId[id]) continue;
+        var d = byId[id], xoff = id === 'prop_bench' ? 0 : rr(rng, -8, 8);
+        if (id === 'prop_bench' && P.sideSW < 120) id = byId.prop_bollard ? 'prop_bollard' : id;
+        mk(id, sx + xoff, y, row);
+      }
+    });
+    // ---- IN-ROAD props: parked cars along both kerbs, barriers/cones/bags in the playable area (kept clear of the spawn point)
+    var carsBase = P.cars, rx0 = L.x0, rx1 = L.x1;
+    function clearOfSpawn(x, y, r) { var dx = x - L.spawn.x, dy = y - L.spawn.y; return dx * dx + dy * dy > r * r; }
+    function roadFree(x, y, hw, hh) {
+      for (var i = 0; i < roadRow.length; i++) { var q = roadRow[i]; if (Math.abs(q.x - x) < q.hw + hw + 24 && Math.abs(q.y - y) < q.hh + hh + 24) return false; }
+      for (var j = 0; j < L.props.length; j++) { var o = L.props[j]; if (o.row === 'road') continue; }
+      return true;
+    }
+    function addRoad(sprite, x, y, w, h, fw, fh, solid, tag) {
+      var p = { id: tag, img: sprite, x: Math.round(x), y: Math.round(y), w: w, h: h, dx: -w / 2, dy: -h, footprint: [fw, fh], solid: solid, zone: 'road', row: 'road', hw: fw / 2, hh: fh };
+      roadRow.push(p); L.props.push(p); return p;
+    }
+    var nCar = 0, tries = 0, side = 0;
+    while (nCar < 5 && tries++ < 80) {
+      var van = rng() < .25, sp = carSprite(pick(rng, carsBase), van, P.glass), cwid = sp.width, chei = sp.height, left = (side++ % 2) === 0;
+      var cx = left ? rx0 + 8 + cwid / 2 : rx1 - 8 - cwid / 2, cy = L.y1t + 90 + rr(rng, 0, L.roadH - 220);
+      if (Math.abs(cy - (L.yC + 30)) < chei + 40) continue;
+      if (!clearOfSpawn(cx, cy - chei / 2, 190)) continue;
+      if (!roadFree(cx, cy, cwid * .45, chei)) continue;
+      addRoad(sp, cx, cy, cwid, chei, cwid * .78, chei * .86, true, 'car'); nCar++;
+    }
+    // abandoned car across a lane, barrier pairs, cones
+    var cs = carSprite(pick(rng, carsBase), false, P.glass), csr = rot90(cs);
+    for (var t = 0; t < 40; t++) {
+      var ax = rr(rng, rx0 + 150, rx1 - 150), ay = rr(rng, L.y1t + 140, L.y1b - 100);
+      if (!clearOfSpawn(ax, ay - 40, 230) || Math.abs(ay - L.yC) < 140 || !roadFree(ax, ay, csr.width * .5, csr.height)) continue;
+      addRoad(csr, ax, ay, csr.width, csr.height, csr.width * .86, csr.height * .78, true, 'car'); break;
+    }
+    var bs = barrierSprite(), nb = 0;
+    for (var t = 0; t < 60 && nb < 3; t++) {
+      var bx = rr(rng, rx0 + 90, rx1 - 90), by = rr(rng, L.y1t + 70, L.y1b - 70);
+      if (!clearOfSpawn(bx, by, 210) || Math.abs(by - L.yC) < 90 || !roadFree(bx, by, 56, 30)) continue;
+      addRoad(bs, bx, by, bs.width, bs.height, 100, 18, true, 'barrier'); nb++;
+      for (var k = 0; k < 2; k++) addRoad(coneSprite(), bx + (k ? 84 : -84), by + 6, 26, 36, 12, 8, false, 'cone');
+    }
+    var cn = coneSprite();
+    for (var t = 0, n2 = 0; t < 40 && n2 < 5; t++) {
+      var qx = rr(rng, rx0 + 40, rx1 - 40), qy = rr(rng, L.y1t + 60, L.y1b - 40);
+      if (!clearOfSpawn(qx, qy, 150) || !roadFree(qx, qy, 14, 10)) continue;
+      addRoad(cn, qx, qy, 26, 36, 12, 8, true, 'cone'); n2++;
+    }
+    for (var t = 0, n3 = 0; t < 60 && n3 < 7; t++) {
+      var tx = rr(rng, rx0 + 30, rx1 - 30), ty = rr(rng, L.y1t + 40, L.y1b - 30);
+      if (!clearOfSpawn(tx, ty, 120) || !roadFree(tx, ty, 14, 10)) continue;
+      addRoad(bagSprite(n3 & 1), tx, ty, 30, 24, 20, 8, false, 'bag'); n3++;
+    }
+    if (L.ch === 'docklands') {
+      for (var t = 0, n4 = 0; t < 40 && n4 < 3; t++) {
+        var id = ['prop_crate', 'prop_barrel', 'prop_crate'][n4], d = byId[id]; if (!d) break;
+        var kx = rr(rng, rx0 + 70, rx1 - 70), ky = rr(rng, L.y1t + 80, L.y1b - 60);
+        if (!clearOfSpawn(kx, ky, 190) || Math.abs(ky - L.yC) < 100 || !roadFree(kx, ky, 50, 30)) continue;
+        var q = mk(id, kx, ky, 'road'); if (q) { q.hh = q.footprint[1]; roadRow.push(q); n4++; }
+      }
+    }
+    L.props.forEach(function (p) { delete p.hw; delete p.hh; });
   }
 
   // ---------- drawing ----------
@@ -281,221 +384,224 @@ window.G = window.G || {};
     ctx.restore();
   }
   var LAMP = { docklands: '255,170,80', soho: '255,120,80', canary: '170,205,255' };
-
   function bakeInto(ctx, L, ox, oy, cw, chh) {
-    var m = L.m, W = L.W, H = L.H, ch = L.ch;
+    var m = L.m, W = L.W, H = L.H, ch = L.ch, P = L.P;
     var rt = rngFor(L.seed, ch + 'tiles'), rd = rngFor(L.seed, ch + 'draw'), rn = rngFor(L.seed, ch + 'noise');
     ctx.save(); ctx.translate(-ox, -oy);
     ctx.beginPath(); ctx.rect(ox, oy, cw, chh); ctx.clip();
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-    var swImg = im(m.sidewalk.fill), asph = gfind(m, 'seam_asphalt'), crack = gfind(m, 'seam_cracked'), cobble = gfind(m, 'seam_cobble');
-    var yT0 = L.FHt - 30, yT1 = L.y1t, yB0 = L.y1b, yB1 = H - L.FHb + 30;
-    // --- sidewalks
-    tileFill(ctx, swImg, 0, yT0, W, yT1, rt, 1, false);
-    tileFill(ctx, swImg, 0, yB0, W, yB1, rt, 1, false);
-    // --- road base
-    tileFill(ctx, asph || swImg, 0, L.y1t - 4, W, L.y1b + 4, rt, 1.0, true);
-    // low-frequency tonal variation to break repetition
-    ctx.save(); ctx.beginPath(); ctx.rect(0, L.y1t, W, L.roadH); ctx.clip();
-    for (var i = 0; i < 70; i++) {
-      var bx = rr(rn, 0, W), by = rr(rn, L.y1t, L.y1b), br = rr(rn, 90, 280), dark = rn() < .55;
+    var swImg = gfind(m, P.swTile) || im(m.sidewalk.fill), road = gfind(m, P.roadTile) || gfind(m, 'seam_asphalt'), crack = gfind(m, 'seam_cracked'), cobble = gfind(m, 'seam_cobble');
+    var X0 = L.x0, X1 = L.x1, Y0 = L.y1t, Y1 = L.y1b, RW = L.roadW, RH = L.roadH;
+    // --- sidewalks everywhere, road rectangle on top
+    tileFill(ctx, swImg, 0, 0, W, H, rt, P.swScale, false);
+    tileFill(ctx, road || swImg, X0 - 4, Y0 - 4, X1 + 4, Y1 + 4, rt, P.roadScale, true);
+    ctx.save(); ctx.beginPath(); ctx.rect(X0, Y0, RW, RH); ctx.clip();
+    for (var i = 0; i < 50; i++) {
+      var bx = rr(rn, X0, X1), by = rr(rn, Y0, Y1), br = rr(rn, 80, 240), dark = rn() < .55;
       glowAt(ctx, bx, by, br, dark ? '0,0,0' : '70,80,100', dark ? rr(rn, .1, .22) : rr(rn, .04, .09), 'source-over');
     }
-    // tyre tracks / oil wear along the lanes
+    // tyre tracks along the lanes (vertical)
     [.125, .375, .625, .875].forEach(function (ln) {
       [-1, 1].forEach(function (sd) {
-        var ty = L.y1t + L.roadH * ln + sd * 46, x = -50;
-        while (x < W) {
-          var len = rr(rn, 140, 520), gap = rr(rn, 60, 300);
-          var g = ctx.createLinearGradient(0, ty - 14, 0, ty + 14); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.5, 'rgba(0,0,0,' + rr(rn, .12, .22) + ')'); g.addColorStop(1, 'rgba(0,0,0,0)');
-          var hg = ctx.createLinearGradient(x, 0, x + len, 0); hg.addColorStop(0, 'rgba(0,0,0,0)'); hg.addColorStop(.2, 'rgba(0,0,0,1)'); hg.addColorStop(.8, 'rgba(0,0,0,1)'); hg.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.save(); ctx.fillStyle = g; ctx.fillRect(x, ty - 14, len, 28); ctx.restore();
-          x += len + gap;
+        var tx = X0 + RW * ln + sd * 34, y = Y0 - 50;
+        while (y < Y1) {
+          var len = rr(rn, 120, 420), gap = rr(rn, 60, 260);
+          var g = ctx.createLinearGradient(tx - 12, 0, tx + 12, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.5, 'rgba(0,0,0,' + rr(rn, .1, .2) + ')'); g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g; ctx.fillRect(tx - 12, y, 24, len); y += len + gap;
         }
       });
     });
-    // cracked patches
-    if (crack) for (var i = 0; i < 7; i++) {
-      var f = feathered(crack, rn, 0, .95), sc = rr(rn, 1.3, 2.2);
-      stamp(ctx, f, rr(rn, 100, W - 100), rr(rn, L.y1t + 90, L.y1b - 90), sc, Math.floor(rn() * 4) * Math.PI / 2, rr(rn, .55, .85), rn() < .5);
+    if (crack) for (var i = 0; i < 5; i++) {
+      var f = feathered(crack, rn, 0, .95), sc = rr(rn, 1.1, 1.8);
+      stamp(ctx, f, rr(rn, X0 + 60, X1 - 60), rr(rn, Y0 + 80, Y1 - 80), sc, Math.floor(rn() * 4) * Math.PI / 2, rr(rn, .45, .75), rn() < .5);
     }
-    // gutter (cobbles) along kerbs
-    if (cobble && ch !== 'canary') {
-      [[L.y1t, 1], [L.y1b, -1]].forEach(function (g) {
-        var gh = 40, gy = g[1] > 0 ? g[0] : g[0] - gh;
-        tileFill(ctx, cobble, 0, gy, W, gy + gh, rd, .55, false);
-        var gr = ctx.createLinearGradient(0, g[0], 0, g[0] + g[1] * gh);
-        gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = gr; ctx.fillRect(0, gy, W, gh);
-      });
+    if (cobble && P.kerbGut) [[Y0, 1], [Y1, -1]].forEach(function (g) {
+      var gh = 34, gy = g[1] > 0 ? g[0] : g[0] - gh;
+      tileFill(ctx, cobble, X0, gy, X1, gy + gh, rd, .5, false);
+      var gr = ctx.createLinearGradient(0, g[0], 0, g[0] + g[1] * gh); gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gr; ctx.fillRect(X0, gy, RW, gh);
+    });
+    // oil stains with a faint rainbow sheen, debris
+    for (var i = 0; i < 9; i++) {
+      var ox2 = rr(rd, X0 + 50, X1 - 50), oy2 = rr(rd, Y0 + 60, Y1 - 60), orr = rr(rd, 18, 46);
+      ctx.save(); ctx.translate(ox2, oy2); ctx.scale(1, rr(rd, .5, .9)); ctx.rotate(rd() * 3);
+      var og = ctx.createRadialGradient(0, 0, 0, 0, 0, orr); og.addColorStop(0, 'rgba(4,4,6,.62)'); og.addColorStop(.7, 'rgba(8,8,12,.35)'); og.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = og; ctx.beginPath(); ctx.arc(0, 0, orr, 0, 6.3); ctx.fill();
+      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(120,70,190,.06)'; ctx.beginPath(); ctx.arc(-orr * .2, -orr * .1, orr * .55, 0, 6.3); ctx.fill();
+      ctx.fillStyle = 'rgba(40,150,150,.05)'; ctx.beginPath(); ctx.arc(orr * .2, orr * .15, orr * .45, 0, 6.3); ctx.fill(); ctx.restore();
+    }
+    for (var i = 0; i < 26; i++) {
+      ctx.save(); ctx.translate(rr(rd, X0 + 20, X1 - 20), rr(rd, Y0 + 20, Y1 - 20)); ctx.rotate(rd() * 6.3);
+      ctx.fillStyle = 'rgba(' + (rd() < .5 ? '190,190,180' : '120,125,130') + ',' + rr(rd, .18, .4) + ')'; ctx.fillRect(0, 0, rr(rd, 5, 14), rr(rd, 3, 9)); ctx.restore();
     }
     ctx.restore();
     // --- wet lit patches under lamps + puddles
-    var wet = gfind(m, 'ground_road_wet'), pud = gfind(m, 'ground_puddle');
-    ctx.save(); ctx.beginPath(); ctx.rect(0, L.y1t, W, L.roadH); ctx.clip();
+    var wet = gfind(m, 'ground_road_wet');
+    ctx.save(); ctx.beginPath(); ctx.rect(X0, Y0, RW, RH); ctx.clip();
     if (wet) L.props.forEach(function (p) {
       if (p.id !== 'prop_lamp') return;
-      var top = p.y < H / 2; var cy = top ? L.y1t + 120 : L.y1b - 120;
-      var f = feathered(wet, rd, 0, 1);
-      stamp(ctx, f, p.x, cy, 1.9, Math.PI / 2 * (rd() < .5 ? 1 : 3), .85, false, 'screen');
+      var cx = Math.max(X0 + 60, Math.min(X1 - 60, p.x)), cy = Math.max(Y0 + 80, Math.min(Y1 - 80, p.y + (p.y < H / 2 ? 110 : -110)));
+      stamp(ctx, feathered(wet, rd, 0, 1), cx, cy, 1.6, Math.PI / 2 * (rd() < .5 ? 1 : 3), .8, false, 'screen');
     });
-    for (var i = 0; i < 11; i++) {
-      var px = rr(rd, 140, W - 140), py = rr(rd, L.y1t + 110, L.y1b - 110), pr = rr(rd, 55, 130);
-      if (Math.abs(px - L.xC) < L.cw / 2 + pr) px += pr * 2 + L.cw;
+    for (var i = 0; i < 9; i++) {
+      var px = rr(rd, X0 + 100, X1 - 100), py = rr(rd, Y0 + 100, Y1 - 100), pr = rr(rd, 50, 115);
       puddle(ctx, rd, px, py, pr, ch);
     }
     ctx.restore();
-    // --- lane markings
+    // --- lane markings: lanes run along Y, so the (horizontal) sprites are rotated 90 degrees
     var mk = m.markings || {};
-    function strip(entry, y, sc, flipY, flipX, alpha) {
-      var img = im(entry); if (!img) return;
-      var w = img.width * sc, h = img.height * sc;
-      ctx.save(); ctx.beginPath(); ctx.rect(-5, y - h, W + 10, h * 2); ctx.rect(L.xC - 82, y - h, 164, h * 2); ctx.clip('evenodd');
-      ctx.globalAlpha = alpha == null ? .93 : alpha;
-      for (var x = -10; x < W; x += w - 2) {
-        ctx.save(); ctx.translate(x + (flipX ? w : 0), y); ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
-        ctx.drawImage(img, 0, flipY ? -h / 2 : -h / 2, w, h); ctx.restore();
-      }
+    function mark(entry, cx, cy, sc, alpha, rot, flip) {
+      var img = im(entry); if (!img) return; var w = img.width * sc, h = img.height * sc;
+      ctx.save(); ctx.globalAlpha = alpha; ctx.translate(cx, cy); ctx.rotate(rot); if (flip) ctx.scale(-1, 1); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
+    }
+    function vstrip(entry, x, sc, alpha) {   // tiled along Y, broken at the zebra crossing
+      var img = im(entry); if (!img) return; var len = img.width * sc - 2;
+      ctx.save(); ctx.beginPath(); ctx.rect(x - 60, Y0, 120, L.yC - 70 - Y0); ctx.rect(x - 60, L.yC + 70, 120, Y1 - L.yC - 70); ctx.clip();
+      for (var y = Y0 - 40; y < Y1; y += len) mark(entry, x, y + len / 2, sc, alpha, Math.PI / 2, false);
       ctx.restore();
     }
-    var yc = L.roadMid;
-    strip(mk.double_yellow, yc, 1.5, false, false);
-    strip(mk.dash, L.y1t + L.roadH * .25, 1.5, false, false);
-    strip(mk.dash, L.y1t + L.roadH * .75, 1.5, false, false);
-    // parking bays along kerbs (a stretch each side)
-    var park = im(mk.parking), parkR = [];
-    if (park) {
-      var psc = 1.5, pw = park.width * psc, ph = park.height * psc;
-      var n = 2;
-      [[L.y1t + 40, false, 0], [L.y1b - 40 - ph, true, 1]].forEach(function (b) {
-        var x0 = b[2] ? 120 : W - 120 - pw * (n + 1);
-        for (var k = 0; k < n; k++) {
-          var px = x0 + k * (pw - 6);
-          if (Math.abs(px + pw / 2 - L.xC) < pw / 2 + L.cw / 2 + 20) continue;
-          parkR.push([px - 20, px + pw + 20, b[2] ? 1 : 0]);
-          ctx.save(); ctx.globalAlpha = .85; ctx.translate(px, b[0]); if (b[1]) { ctx.translate(0, ph); ctx.scale(1, -1); } ctx.drawImage(park, 0, 0, pw, ph); ctx.restore();
-        }
+    vstrip(mk.double_yellow, L.xMid, 1.45, .75);
+    vstrip(mk.dash, X0 + RW * .25, 1.45, .5); vstrip(mk.dash, X0 + RW * .75, 1.45, .5);
+    if (im(mk.arrow)) [[.125, 0], [.375, 0], [.625, 1], [.875, 1]].forEach(function (ln) {
+      [.3, .78].forEach(function (f) {
+        var ay = Y0 + RH * f; if (Math.abs(ay - L.yC) < 160) ay += 200;
+        mark(mk.arrow, X0 + RW * ln[0], ay, 1.1, .26, ln[1] ? Math.PI / 2 : -Math.PI / 2, false);
       });
-    }
-    // arrows in lane centres
-    var arr = im(mk.arrow);
-    if (arr) {
-      var asc = 1.3, aw = arr.width * asc, ah = arr.height * asc;
-      [[.125, 1], [.375, 1], [.625, 0], [.875, 0]].forEach(function (ln) {
-        for (var k = 0; k < 2; k++) {
-          var ax = (k + .35 + rd() * .3) * W / 2 * 0.98;
-          if (Math.abs(ax - L.xC) < aw / 2 + L.cw) continue;
-          var hit = false; parkR.forEach(function (r) { if ((ln[0] < .5) === (r[2] === 0) && ax + aw / 2 > r[0] && ax - aw / 2 < r[1] && (ln[0] === .125 || ln[0] === .875)) hit = true; }); if (hit) continue;
-          ctx.save(); ctx.globalAlpha = .88; ctx.translate(ax, L.y1t + L.roadH * ln[0]); if (ln[1]) ctx.scale(-1, 1); ctx.drawImage(arr, -aw / 2, -ah / 2, aw, ah); ctx.restore();
-        }
-      });
-    }
-    // zebra crossing (bars run along the road, stacked across it)
+    });
+    // the one small zebra crossing (bars run along Y, stacked across the road)
     var bar = im(mk.crosswalk_bar);
     if (bar) {
-      var bsc = 1.9, bl = bar.height * bsc, bw = bar.width * bsc, step = bw * 1.9;
-      ctx.save(); ctx.globalAlpha = .9;
-      for (var y = L.y1t + 52; y < L.y1b - 40; y += step) {
-        ctx.save(); ctx.translate(L.xC, y + bw / 2); ctx.rotate(Math.PI / 2); if (rd() < .5) ctx.scale(1, -1); ctx.drawImage(bar, -bw / 2, -bl / 2, bw, bl); ctx.restore();
-      }
+      var bsc = 1.45, bw = bar.width * bsc, bl = bar.height * bsc, step = bw * 2.1;
+      ctx.save(); ctx.globalAlpha = .38;
+      for (var x = X0 + 36; x < X1 - 30; x += step) ctx.drawImage(bar, x, L.yC - bl / 2, bw, bl);
       ctx.restore();
     }
-    // manholes + drains
     var mh = im(mk.manhole), dr = im(mk.drain);
-    if (mh) {
-      var mxs = [.12, .3, .7, .88], mys = [.14, .36, .64, .86];
-      for (var i = 0; i < 4; i++) {
-        var mx = W * mxs[i] + rr(rd, -60, 60), my = L.y1t + L.roadH * mys[(i * 3 + Math.floor(rd() * 2)) % 4] + rr(rd, -20, 20);
-        if (Math.abs(mx - L.xC) < L.cw + 70) mx = L.xC + (mx < L.xC ? -1 : 1) * (L.cw + 90);
-        ctx.drawImage(mh, mx - mh.width * .4, my - mh.height * .4, mh.width * .8, mh.height * .8);
-      }
+    if (mh) for (var i = 0; i < 4; i++) {
+      var mx = X0 + RW * [.2, .8, .35, .65][i] + rr(rd, -30, 30), my = Y0 + RH * [.2, .35, .72, .88][i] + rr(rd, -20, 20);
+      ctx.drawImage(mh, mx - mh.width * .35, my - mh.height * .35, mh.width * .7, mh.height * .7);
     }
-    if (dr) for (var x = 130 + rr(rd, 0, 60); x < W - 100; x += 330 + rr(rd, -40, 60)) {
-      if (Math.abs(x - L.xC) < L.cw + 60) continue;
-      var dw = dr.width * .55, dh = dr.height * .55;
-      ctx.drawImage(dr, x - dw / 2, L.y1t + 6, dw, dh);
-      ctx.save(); ctx.translate(x + 200 - dw / 2, L.y1b - 6); ctx.scale(1, -1); ctx.drawImage(dr, 0, 0, dw, dh); ctx.restore();
+    if (dr) for (var x = X0 + 90 + rr(rd, 0, 40); x < X1 - 80; x += 260 + rr(rd, -30, 50)) {
+      var dw = dr.width * .5, dh = dr.height * .5;
+      ctx.drawImage(dr, x - dw / 2, Y0 + 6, dw, dh);
+      ctx.save(); ctx.translate(x + 120 - dw / 2, Y1 - 6); ctx.scale(1, -1); ctx.drawImage(dr, 0, 0, dw, dh); ctx.restore();
     }
-    // --- sidewalk detail: puddles / cracks / lit spill from windows
-    // --- curbs
-    var cs = m.sidewalk.curbStraight.map(im).filter(Boolean), cScale = L.curbS;
+    // --- chapter set-dressing on the road
+    if (ch === 'docklands') {   // dock railway tracks inlaid across the road
+      var ty = Y0 + RH * .7;
+      ctx.save(); ctx.beginPath(); ctx.rect(X0, Y0, RW, RH); ctx.clip();
+      for (var x = X0; x < X1; x += 22) { ctx.fillStyle = 'rgba(46,34,24,.8)'; ctx.fillRect(x, ty - 26, 12, 52); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x + 12, ty - 26, 3, 52); }
+      [-18, 18].forEach(function (o) {
+        ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(X0, ty + o - 1, RW, 8);
+        var g = ctx.createLinearGradient(0, ty + o - 4, 0, ty + o + 4); g.addColorStop(0, '#59616a'); g.addColorStop(.5, '#9aa4ad'); g.addColorStop(1, '#3b4249'); ctx.fillStyle = g; ctx.fillRect(X0, ty + o - 3, RW, 5);
+      });
+      ctx.restore();
+      ctx.save(); ctx.beginPath(); ctx.rect(X0, Y1 - 12, RW, 12); ctx.clip(); ctx.fillStyle = 'rgba(226,170,30,.55)';
+      for (var x = X0 - 20; x < X1; x += 28) { ctx.beginPath(); ctx.moveTo(x, Y1); ctx.lineTo(x + 14, Y1); ctx.lineTo(x + 28, Y1 - 12); ctx.lineTo(x + 14, Y1 - 12); ctx.fill(); } ctx.restore();
+    } else if (ch === 'canary') {   // yellow hatched box junction
+      var hx = X0 + RW * .5 - 120, hy = Y0 + RH * .62;
+      if (Math.abs(hy - L.spawn.y) < 130) hy += 190;
+      ctx.save(); ctx.strokeStyle = 'rgba(235,200,40,.6)'; ctx.lineWidth = 4; ctx.strokeRect(hx, hy, 240, 150);
+      ctx.beginPath(); ctx.rect(hx, hy, 240, 150); ctx.clip(); ctx.lineWidth = 3;
+      for (var k = -150; k < 240; k += 26) { ctx.beginPath(); ctx.moveTo(hx + k, hy + 150); ctx.lineTo(hx + k + 150, hy); ctx.stroke(); } ctx.restore();
+    }
+    // --- curbs (4 sides; side ones are rotated)
+    var cs = m.sidewalk.curbStraight.map(im).filter(Boolean), cScale = L.curbS, rc = rngFor(L.seed, ch + 'curb');
     if (cs.length) {
-      var rc = rngFor(L.seed, ch + 'curb');
-      [[L.y1t - L.curbH, false], [L.y1b, true]].forEach(function (c) {
-        var x = 0;
-        while (x < W) {
-          var ci = pick(rc, cs), cw = ci.width * cScale - 1, chh2 = ci.height * cScale;
-          ctx.save(); ctx.translate(x, c[0] + (c[1] ? chh2 : 0)); if (c[1]) ctx.scale(1, -1); ctx.drawImage(ci, 0, 0, cw + 1, chh2); ctx.restore();
-          x += cw;
+      [[Y0 - L.curbH, false], [Y1, true]].forEach(function (c) {
+        var x = X0 - L.curbH;
+        while (x < X1 + L.curbH) {
+          var ci = pick(rc, cs), cw2 = ci.width * cScale - 1, h2 = ci.height * cScale;
+          ctx.save(); ctx.translate(x, c[0] + (c[1] ? h2 : 0)); if (c[1]) ctx.scale(1, -1); ctx.drawImage(ci, 0, 0, cw2 + 1, h2); ctx.restore(); x += cw2;
+        }
+      });
+      [0, 1].forEach(function (sd) {
+        var y = Y0 - L.curbH;
+        while (y < Y1 + L.curbH) {
+          var ci = pick(rc, cs), cw2 = ci.width * cScale - 1, h2 = ci.height * cScale;
+          ctx.save();
+          if (!sd) { ctx.translate(X0 - h2, y + cw2); ctx.rotate(-Math.PI / 2); } else { ctx.translate(X1 + h2, y); ctx.rotate(Math.PI / 2); }
+          ctx.drawImage(ci, 0, 0, cw2 + 1, h2); ctx.restore(); y += cw2;
         }
       });
     }
-    // gentle shadow from curb onto road
-    [[L.y1t, 1], [L.y1b, -1]].forEach(function (g) {
-      var gr = ctx.createLinearGradient(0, g[0], 0, g[0] + g[1] * 26); gr.addColorStop(0, 'rgba(0,0,0,.45)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = gr; ctx.fillRect(0, g[1] > 0 ? g[0] : g[0] - 26, W, 26);
+    [[Y0, 1, 0], [Y1, -1, 0], [X0, 1, 1], [X1, -1, 1]].forEach(function (g) {
+      var a = g[0], b = a + g[1] * 26, gr = ctx.createLinearGradient(g[2] ? a : 0, g[2] ? 0 : a, g[2] ? b : 0, g[2] ? 0 : b); gr.addColorStop(0, 'rgba(0,0,0,.45)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gr; if (g[2]) ctx.fillRect(Math.min(a, b), Y0, 26, RH); else ctx.fillRect(X0, Math.min(a, b), RW, 26);
     });
-    // --- facade walls
+    // --- facade walls: sides first (rotated), then top/bottom on top of the corners
+    function sideWall(list, left) {
+      var FH = L.sideWall;
+      list.forEach(function (p) {
+        var img = im(p.f); if (!img) return;
+        ctx.save();
+        if (left) { ctx.translate(0, p.x + p.w + 1); ctx.rotate(-Math.PI / 2); } else { ctx.translate(W, p.x - 1); ctx.rotate(Math.PI / 2); }
+        ctx.drawImage(img, 0, 0, p.w + 2, FH); ctx.restore();
+      });
+      var x0 = left ? FH : W - FH - 34, gr = ctx.createLinearGradient(left ? FH : W - FH, 0, left ? FH + 34 : W - FH - 34, 0);
+      gr.addColorStop(0, 'rgba(0,0,0,.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gr; ctx.fillRect(x0, 0, 34, H);
+      list.forEach(function (p) { var g = p.f.glow; if (!g) return; glowAt(ctx, left ? FH + 26 : W - FH - 26, p.x + p.w / 2, p.w * .8 + 30, g[0] + ',' + g[1] + ',' + g[2], g[3] * .9); });
+    }
+    sideWall(L.wallL, true); sideWall(L.wallR, false);
     function drawWall(list, y, FH, bottom) {
       list.forEach(function (p) { var img = im(p.f); if (img) ctx.drawImage(img, Math.round(p.x), y, Math.ceil(p.w) + 1, FH); });
-      // contact shadow + window light spill on the sidewalk
-      var sy = bottom ? y - 34 : y + FH;
-      var gr = ctx.createLinearGradient(0, bottom ? y : y + FH, 0, bottom ? y - 34 : y + FH + 34);
-      gr.addColorStop(0, 'rgba(0,0,0,.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = gr; ctx.fillRect(0, sy, W, 34);
-      list.forEach(function (p) {
-        var g = p.f.glow; if (!g) return;
-        var cy = bottom ? y - 30 : y + FH + 28;
-        glowAt(ctx, p.x + p.w / 2, cy, p.w * .8 + 40, g[0] + ',' + g[1] + ',' + g[2], g[3] * .9);
-      });
+      var sy = bottom ? y - 34 : y + FH, gr = ctx.createLinearGradient(0, bottom ? y : y + FH, 0, bottom ? y - 34 : y + FH + 34);
+      gr.addColorStop(0, 'rgba(0,0,0,.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gr; ctx.fillRect(0, sy, W, 34);
+      list.forEach(function (p) { var g = p.f.glow; if (!g) return; glowAt(ctx, p.x + p.w / 2, bottom ? y - 30 : y + FH + 28, p.w * .8 + 40, g[0] + ',' + g[1] + ',' + g[2], g[3] * .9); });
     }
     drawWall(L.wallTop, 0, L.FHt, false);
     if (L.wallBot) drawWall(L.wallBot, H - L.FHb, L.FHb, true);
     else {
-      var q = im(m.quay[0]); var n = Math.ceil(W / 540), qw = W / n;
+      var q = im(m.quay[0]), n = Math.ceil(W / 540), qw = W / n;
       for (var i = 0; i < n; i++) ctx.drawImage(q, i * qw, H - L.FHb, qw + 1, L.FHb);
       var gr = ctx.createLinearGradient(0, H - L.FHb, 0, H - L.FHb - 30); gr.addColorStop(0, 'rgba(0,0,0,.4)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = gr; ctx.fillRect(0, H - L.FHb - 30, W, 30);
     }
-    // soho: lantern strings hung across the facades
     var la = im((m.props || []).filter(function (p) { return p.id === 'prop_lanterns_a'; })[0]);
     var lb = im((m.props || []).filter(function (p) { return p.id === 'prop_lanterns_b'; })[0]);
     if (la && lb) {
       var rl = rngFor(L.seed, ch + 'lant');
       [[18, false], [H - L.FHb + 40, true]].forEach(function (s) {
-        var x = rr(rl, -40, 60);
-        while (x < W - 100) {
-          var li = rl() < .5 ? la : lb, sc = rr(rl, .95, 1.15), w = li.width * sc, h = li.height * sc;
-          ctx.drawImage(li, x, s[0] + rr(rl, 0, 24), w, h);
-          glowAt(ctx, x + w / 2, s[0] + h * .7, w * .7, '255,60,40', .12);
-          x += w * rr(rl, .92, 1.0);
-        }
+        var x = rr(rl, -40, 40);
+        while (x < W - 100) { var li = rl() < .5 ? la : lb, sc = rr(rl, .95, 1.15), w = li.width * sc, h = li.height * sc; ctx.drawImage(li, x, s[0] + rr(rl, 0, 24), w, h); glowAt(ctx, x + w / 2, s[0] + h * .7, w * .7, '255,60,40', .12); x += w * rr(rl, .92, 1.0); }
       });
     }
     // --- prop ground shadows
     L.props.forEach(function (p) {
-      if (p.id.indexOf('lantern') >= 0) return;
+      if (p.id.indexOf('lantern') >= 0 || p.id === 'bag') return;
       var fw = p.solid || p.posts ? Math.max(p.footprint[0], 20) : Math.max(p.w * .5, 16);
-      ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.42)'; ctx.beginPath();
-      ctx.ellipse(p.x + 5, p.y - 2, fw * .62, Math.min(14, 6 + fw * .1), 0, 0, 6.2832); ctx.fill(); ctx.restore();
+      ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.42)'; ctx.beginPath(); ctx.ellipse(p.x + 5, p.y - 2, fw * .62, Math.min(p.id === 'car' ? 24 : 14, 6 + fw * .1), 0, 0, 6.2832); ctx.fill(); ctx.restore();
     });
-    // --- lamp light pools on sidewalk + road
+    // --- chapter colour grade (ground + walls only; props stay vivid for readability)
+    P.grade.forEach(function (g) { ctx.save(); ctx.globalCompositeOperation = g[0]; ctx.globalAlpha = g[2]; ctx.fillStyle = g[1]; ctx.fillRect(0, 0, W, H); ctx.restore(); });
+    // --- lamp light pools and chapter lights (added after the grade so they stay luminous)
     L.props.forEach(function (p) {
       if (p.id !== 'prop_lamp') return;
-      var top = p.y < H / 2;
-      glowAt(ctx, p.x, p.y + (top ? 40 : -40), 240, LAMP[ch] || '255,170,80', ch === 'canary' ? .17 : .22);
+      var dx = W / 2 - p.x, dy = H / 2 - p.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
+      glowAt(ctx, p.x + dx / d * 70, p.y - 20 + dy / d * 70, 230, P.lamp, ch === 'canary' ? .2 : .24);
     });
-    // soft overall edge vignette on the long axis for depth
-    var vg = ctx.createLinearGradient(0, 0, 0, H);
-    vg.addColorStop(0, 'rgba(0,0,0,.28)'); vg.addColorStop(.18, 'rgba(0,0,0,0)'); vg.addColorStop(.82, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.32)');
+    if (ch === 'soho') {
+      var rs = rngFor(L.seed, 'soholight');
+      for (var i = 0; i < 9; i++) { var sx = rs() < .5 ? L.sideWall + 30 : W - L.sideWall - 30, sy = rr(rs, 200, H - 200); glowAt(ctx, sx, sy, 170, i & 1 ? '255,40,140' : '30,215,205', .12); }
+      for (var i = 0; i < 6; i++) glowAt(ctx, rr(rs, X0, X1), rr(rs, Y0 + 40, Y1 - 40), 170, i & 1 ? '255,40,140' : '30,215,205', .07);
+    } else if (ch === 'canary') {
+      var g2 = ctx.createLinearGradient(0, 0, W, 0); g2.addColorStop(0, 'rgba(90,150,255,.1)'); g2.addColorStop(.5, 'rgba(90,150,255,0)'); g2.addColorStop(1, 'rgba(90,150,255,.1)');
+      ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
+      glowAt(ctx, W / 2, Y0 + 40, 380, '120,180,255', .1); glowAt(ctx, W / 2, Y1 - 40, 380, '120,180,255', .1);
+    } else {
+      var g3 = ctx.createLinearGradient(0, Y1 - 160, 0, H); g3.addColorStop(0, 'rgba(120,160,210,0)'); g3.addColorStop(1, 'rgba(120,160,210,.08)'); ctx.fillStyle = g3; ctx.fillRect(0, Y1 - 160, W, H - Y1 + 160);
+    }
+    var vg = ctx.createLinearGradient(0, 0, 0, H); vg.addColorStop(0, 'rgba(0,0,0,.28)'); vg.addColorStop(.15, 'rgba(0,0,0,0)'); vg.addColorStop(.85, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.32)');
     ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+    var vh = ctx.createLinearGradient(0, 0, W, 0); vh.addColorStop(0, 'rgba(0,0,0,.25)'); vh.addColorStop(.12, 'rgba(0,0,0,0)'); vh.addColorStop(.88, 'rgba(0,0,0,0)'); vh.addColorStop(1, 'rgba(0,0,0,.25)');
+    ctx.fillStyle = vh; ctx.fillRect(0, 0, W, H);
     ctx.restore();
   }
 
   // ---------- public ----------
   var MAX_PX = 5000000; // single-canvas budget; bigger worlds are returned as chunks
   function build(ch, W, H, seed) {
-    W = W || 1620; H = H || 2400; seed = seed | 0;
+    W = W || 1000; H = H || 1500; seed = seed | 0;
     try {
       if (!ready(ch)) return null;
       var L = plan(ch, W, H, seed); if (!L) return null;
@@ -511,8 +617,8 @@ window.G = window.G || {};
       return out;
     } catch (e) { if (window.console) console.warn('street.build failed', e); return null; }
   }
-  function solids(ch, seed, W, H) { var L = plan(ch, W || 1620, H || 2400, seed | 0); return L ? L.solids.map(function (s) { return { x: s.x, y: s.y, w: s.w, h: s.h, kind: s.kind, id: s.id }; }) : []; }
-  function props(ch, seed, W, H) { var L = plan(ch, W || 1620, H || 2400, seed | 0); return L ? L.props : []; }
+  function solids(ch, seed, W, H) { var L = plan(ch, W || 1000, H || 1500, seed | 0); return L ? L.solids.map(function (s) { return { x: s.x, y: s.y, w: s.w, h: s.h, kind: s.kind, id: s.id }; }) : []; }
+  function props(ch, seed, W, H) { var L = plan(ch, W || 1000, H || 1500, seed | 0); return L ? L.props : []; }
   function drawProp(ctx, p) {
     if (!p.img) return;
     if (p.flip) { ctx.save(); ctx.translate(p.x, 0); ctx.scale(-1, 1); ctx.drawImage(p.img, p.dx, p.y + p.dy, p.w, p.h); ctx.restore(); }

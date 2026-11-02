@@ -5,7 +5,7 @@ window.G = window.G || {};
   C.W = 540; C.H = 960;
   C.DT = 1 / 60;
   // ---------- world / camera ----------
-  C.WORLD_W = 1620; C.WORLD_H = 2400;   // world is larger than the 540x960 viewport
+  C.WORLD_W = 1000; C.WORLD_H = 1500;   // world is larger than the 540x960 viewport
   C.CAM_ZOOM = 1.35;                    // ctx scale; visible world rect = 540/zoom x 960/zoom
   C.CAM_LERP = 7;                       // follow speed (1/s), exponential smoothing
   C.HERO_MARGIN = 40;                   // hero keeps this far from the world edge

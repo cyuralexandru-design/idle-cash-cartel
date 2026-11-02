@@ -10,6 +10,9 @@ window.G = window.G || {};
   function rr(a, b) { return a + (b - a) * rnd(); }
   function setting(k) { try { var s = G.save && G.save.state && G.save.state.settings; return !(s && s[k] === false); } catch (e) { return true; } }
   function sfx(n) { try { if (G.audio) G.audio.play(n); } catch (e) {} }
+  function sget(k, d) { try { var v = G.save.state.settings[k]; return typeof v === typeof d ? v : d; } catch (e) { return d; } }
+  function vib(ms) { try { if (G.settings) G.settings.vibrate(ms); } catch (e) {} }
+  var dnums = [];   // floating damage numbers (world space)
 
   // ---------------- fx sprites (G_MANIFEST.fx / icons) ----------------
   var FXI = null, tintCache = {}, glowCv = null;
@@ -196,8 +199,8 @@ window.G = window.G || {};
     S.ch = pickChapter(); pub.chapter = S.ch.id; pub.chapterName = S.ch.name; pub.waves = S.ch.waves;
     hero = { kind: 'hero', x: WW / 2, y: WH / 2 + 60, r: C.HERO.r, hp: C.HERO.startHp, maxHp: 0, facing: -Math.PI / 2, moving: false, speed: 0, state: 'idle', t: 0, animT: 0, weaponId: null, scale: 1, inv: 0, hurtT: 0, shootT: 0, lsCd: 0, dead: false };
     recompute(); hero.hp = hero.maxHp;
-    try { if (G.street && G.street.load) G.street.load(function () {}); } catch (e) {}
     genProps(); snapCam();
+    try { if (G.street && G.street.load && !(G.street.ready && G.street.ready())) G.street.load(function () { if (!streetOn && S && S.ch) { var ob = props; genProps(); } }); } catch (e) {}
     var sw = (opts.loadout && (opts.loadout.startWeapon || opts.loadout.weapon)) || (save && save.startWeapon) || C.START_WEAPON;
     if (!C.WEAPONS[sw]) sw = C.START_WEAPON;
     S.weapon = newWeapon(sw, 0);
@@ -342,6 +345,7 @@ window.G = window.G || {};
   function hitEnemy(e, dmg, ang) {
     if (!e.active) return;
     e.hp -= dmg; e.hurtT = 0.12;
+    if (dnums.length < 40 && setting('dmgNumbers')) dnums.push({ x: e.x + rr(-6, 6), y: e.y - e.r - 6, v: Math.max(1, Math.round(dmg)), t: 0.7, big: dmg >= 40 });
     if (!e.boss) { var kb = 2.5 * (1 - min(0.8, e.r / 40)); e.x += cos(ang) * kb; e.y += sin(ang) * kb; }
     if (G.fx) { G.fx.hit(e.x, e.y, ang); G.fx.blood(e.x, e.y, ang, 2); }
     var ls = S.st.lifesteal;
@@ -466,7 +470,7 @@ window.G = window.G || {};
     var ar = S.st.armor, mult = ar >= 0 ? 10 / (10 + ar) : 1 + (-ar) / 10;
     var d = max(1, Math.round(dmg * mult));
     hero.hp -= d; hero.inv = C.HERO.invuln; hero.hurtT = 0.2;
-    sfx('hurt'); if (setting('shake')) S.shake = max(S.shake, 6); if (setting('flashes')) S.flash = 0.25;
+    sfx('hurt'); vib(35); if (setting('shake')) S.shake = max(S.shake, 6); if (setting('flashes')) S.flash = 0.25;
     if (G.fx) G.fx.blood(hero.x, hero.y, rnd() * TAU, 4);
     if (hero.hp <= 0) { hero.hp = 0; hero.dead = true; hero.state = 'dead'; hero.t = 0; beginEnd(false); }
   }
@@ -810,6 +814,7 @@ window.G = window.G || {};
     if (S.shake > 0) S.shake = max(0, S.shake - 40 * dt);
     if (S.flash > 0) S.flash = max(0, S.flash - dt);
     if (S.hintT > 0) S.hintT -= dt;
+    for (var di = dnums.length - 1; di >= 0; di--) { var dn = dnums[di]; dn.t -= dt; dn.y -= 38 * dt; if (dn.t <= 0) { dnums[di] = dnums[dnums.length - 1]; dnums.pop(); } }
     if (G.fx) G.fx.update(dt);
     if (S.phase === 'fight') {
       updateHero(dt); waveUpdate(dt);
@@ -913,8 +918,8 @@ window.G = window.G || {};
     if (ST && ST.ready && ST.build) {   // street module (optional): cached floor+walls canvas, static solids, y-sorted decor
       try {
         if (ST.ready()) {
-          var sd = (rnd() * 4294967295) >>> 0, chn = S.ch ? S.ch.id : 1, cvs = ST.build(chn, WW, WH, sd);
-          if (cvs) {
+          var sd = (rnd() * 4294967295) >>> 0, chn = ST.chapters ? ST.chapters[(S.ch ? S.ch.id : 1) - 1] || ST.chapters[0] : 'docklands', cvs = ST.build(chn, WW, WH, sd);
+          if (cvs && !cvs.length) {
             streetCv = cvs; streetOn = true;
             var sl = ST.solids ? ST.solids(chn, sd) : null, i0, q0;
             if (sl) for (i0 = 0; i0 < sl.length; i0++) { q0 = sl[i0]; solids.push({ k: 'street_solid', x: q0.x + q0.w / 2, y: q0.y + q0.h, hw: q0.w / 2, hh: q0.h, solid: true, st: 1 }); }
@@ -1096,9 +1101,9 @@ window.G = window.G || {};
   function drawHud() {
     bar(14, 12, 210, 18, hero.hp / hero.maxHp, '#c0392b', '#14161a'); txt(Math.ceil(hero.hp) + '/' + hero.maxHp, 20, 27, 14, '#fff');
     bar(14, 36, 210, 9, S.xp / C.xpNeed(S.level), '#4caf50', '#14161a'); txt('LV ' + S.level, 230, 46, 13, '#9be59f');
-    txt('WAVE ' + S.wave + '/' + S.ch.waves, W / 2 + 20, 24, 18, '#f2efe9', 'center'); txt(S.ch.name.toUpperCase(), W / 2 + 20, 38, 10, '#9aa0a6', 'center');
+    txt('WAVE ' + S.wave + '/' + S.ch.waves, W / 2 + 36, 24, 18, '#f2efe9', 'center'); txt(S.ch.name.toUpperCase(), W / 2 + 36, 37, 9, '#9aa0a6', 'center');
     var tl = max(0, S.waveLen - S.waveT);
-    txt(S.wave >= S.ch.waves && S.boss ? 'BOSS' : Math.ceil(tl) + 's', W / 2 + 20, 56, 22, tl < 5 ? '#ff6b6b' : '#e8a317', 'center');
+    txt(S.wave >= S.ch.waves && S.boss ? 'BOSS' : Math.ceil(tl) + 's', W / 2 + 36, 62, 22, tl < 5 ? '#ff6b6b' : '#e8a317', 'center');
     ctx.fillStyle = 'rgba(31,34,39,.9)'; ctx.fillRect(W - 50, 10, 38, 38); ctx.strokeStyle = '#f2efe9'; ctx.lineWidth = 2; ctx.strokeRect(W - 50, 10, 38, 38);
     ctx.fillStyle = '#f2efe9'; ctx.fillRect(W - 40, 19, 6, 20); ctx.fillRect(W - 28, 19, 6, 20);
     txt('$' + S.cash, W - 14, 74, 18, '#6fe07a', 'right'); if (S.gold > 0) txt('G ' + S.gold, W - 14, 96, 15, '#ffd23f', 'right');
@@ -1113,7 +1118,7 @@ window.G = window.G || {};
         ctx.save(); ctx.translate(ax, ay); ctx.rotate(ba); ctx.fillStyle = '#ff4d4d'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-10, -11); ctx.lineTo(-10, 11); ctx.closePath(); ctx.stroke(); ctx.fill(); ctx.restore();
       }
     }
-    if (S.hintT > 0 && S.wave === 1) { ctx.globalAlpha = min(1, S.hintT); txt('Touch and drag on the right side / WASD to move. Your gun auto-fires.', W / 2, H - 40, 15, '#f2efe9', 'center'); ctx.globalAlpha = 1; }
+    if (S.hintT > 0 && S.wave === 1) { ctx.globalAlpha = min(1, S.hintT); txt('Touch and drag on the ' + sget('joySide', 'right') + ' side / WASD to move. Your gun auto-fires.', W / 2, H - 40, 15, '#f2efe9', 'center'); ctx.globalAlpha = 1; }
     if (S.phase === 'ending') { ctx.globalAlpha = 0.55; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; txt('YOU WENT DOWN', W / 2, H / 2, 38, '#ff6b6b', 'center'); }
     if (S.phase === 'won') txt('VICTORY!', W / 2, H / 2 - 80, 44, '#e8a317', 'center');
     if (S.toastT > 0) { S.toastT -= 1 / 60; txt('LEVEL UP!', (hero.x - cam.l) * ZOOM, (hero.y - cam.t) * ZOOM - 70 - (1.2 - S.toastT) * 20, 18, '#9be59f', 'center'); }
@@ -1128,7 +1133,7 @@ window.G = window.G || {};
     var c = ctx; c.setTransform(1, 0, 0, 1, 0, 0);
     c.fillStyle = '#07080a'; c.fillRect(0, 0, W, H);
     c.save();
-    if (S.shake > 0) c.translate(rr(-S.shake, S.shake) * 0.5, rr(-S.shake, S.shake) * 0.5);
+    if (S.shake > 0 && setting('shake')) c.translate(rr(-S.shake, S.shake) * 0.5, rr(-S.shake, S.shake) * 0.5);
     c.scale(ZOOM, ZOOM); c.translate(-cam.l, -cam.t);
     var pup = usePuppet(), i;
     drawFloor(c); drawBorder(c);
@@ -1164,6 +1169,7 @@ window.G = window.G || {};
       drawBullet(c, b);
     }
     if (G.fx) G.fx.draw(c);
+    if (dnums.length) { c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = '#000'; for (i = 0; i < dnums.length; i++) { var dn = dnums[i]; if (!vis(dn.x, dn.y, 20)) continue; c.globalAlpha = min(1, dn.t * 2.2); c.font = '800 ' + (dn.big ? 20 : 14) + 'px system-ui,sans-serif'; c.fillStyle = dn.big ? '#ffd23f' : '#fff'; c.strokeText(dn.v, dn.x, dn.y); c.fillText(dn.v, dn.x, dn.y); } c.globalAlpha = 1; }
     c.restore();
     c.setTransform(1, 0, 0, 1, 0, 0);
     if (vigCanvas) c.drawImage(vigCanvas, 0, 0);
@@ -1171,19 +1177,19 @@ window.G = window.G || {};
     c.strokeStyle = 'rgba(160,190,230,.13)'; c.lineWidth = 1; c.beginPath();
     for (i = 0; i < C.RAIN_STREAKS; i++) { var rx = (i * 97 + S.tickT * 60) % (W + 20), ry = (i * 211 + S.tickT * 700 + i * 13) % H; c.moveTo(rx, ry); c.lineTo(rx - 4, ry + 16); }
     c.stroke();
-    if (S.flash > 0) { c.globalAlpha = S.flash; c.fillStyle = '#b3202a'; c.fillRect(0, 0, W, H); c.globalAlpha = 1; }
+    if (S.flash > 0 && setting('flashes')) { c.globalAlpha = S.flash; c.fillStyle = '#b3202a'; c.fillRect(0, 0, W, H); c.globalAlpha = 1; }
     drawHud();
   }
 
   // ---------------- input ----------------
   function toCanvas(ev) { var r = cv.getBoundingClientRect(); return [(ev.clientX - r.left) / r.width * W, (ev.clientY - r.top) / r.height * H]; }
   function on(target, type, fn, opt) { target.addEventListener(type, fn, opt); listeners.push([target, type, fn, opt]); }
-  var JOY_R = 56, JOY_ZONE_X = W * 0.35;   // floating stick: only touches in the right ~65% of the screen spawn it; it is drawn only while held
-  function joyHome() { joy.on = false; joy.id = -1; joy.bx = joy.tx = W - 90; joy.by = joy.ty = H - 110; joy.dx = joy.dy = 0; }
+  var JOY_R = 56, JOY_ZONE_X = W * 0.35, JOY_LEFT = false;   // floating stick: only touches in the right ~65% of the screen spawn it; it is drawn only while held
+  function joyHome() { JOY_LEFT = sget('joySide', 'right') === 'left'; JOY_R = 56 * Math.max(0.5, Math.min(1.6, sget('joySize', 1))); joy.on = false; joy.id = -1; joy.bx = joy.tx = JOY_LEFT ? 90 : W - 90; joy.by = joy.ty = H - 110; joy.dx = joy.dy = 0; }
   function joyStart(id, p) {
     if (joy.on || S.phase !== 'fight' || paused) return false;
     if (p[0] > W - 58 && p[1] < 58) { pause(); return true; }
-    if (p[0] < JOY_ZONE_X) return false;
+    if (JOY_LEFT ? p[0] > W - JOY_ZONE_X : p[0] < JOY_ZONE_X) return false;
     joy.on = true; joy.id = id; joy.bx = joy.tx = p[0]; joy.by = joy.ty = p[1]; joy.dx = joy.dy = 0; return true;
   }
   function joyMove(p) {
@@ -1247,7 +1253,7 @@ window.G = window.G || {};
   function start(o) {
     stop(); opts = o || {}; cv = opts.canvas; if (!cv) throw new Error('arena.start needs canvas');
     cv.width = W; cv.height = H; ctx = cv.getContext('2d'); ctx.lineJoin = 'round';
-    makePools(); newRun(); makeVig(); keys = {}; paused = false; acc = 0;
+    makePools(); newRun(); makeVig(); keys = {}; paused = false; acc = 0; dnums.length = 0;
     if (G.fx && G.fx.clear) G.fx.clear();
     G.arenaUI.attach(cv); bindInput(); syncWeaponsPub();
     running = true; startWave(1); syncPub();
@@ -1264,17 +1270,20 @@ window.G = window.G || {};
   function pause() {
     if (!running || paused || !S || S.phase !== 'fight') return;
     paused = true; joyEnd();
+    try { if (G.audio && typeof G.audio.pauseAll === 'function') G.audio.pauseAll(); } catch (e) {}
     G.arenaUI.showPause({ resume: resume, quit: function () { S.result = mkResult(false); finishRun(); } });
   }
   function resume() {
     if (!running || !paused) return;
     paused = false; acc = 0; lastTs = performance.now(); G.arenaUI.hide();
+    try { if (G.audio && typeof G.audio.resumeAll === 'function') G.audio.resumeAll(); } catch (e) {}
   }
 
   G.arena = { basePath: null, start: start, stop: stop, pause: pause, resume: resume, state: pub, isPaused: function () { return paused; } };
 
   // ---------------- test hooks ----------------
   window.__arenaTest = {
+    place: function (x, y) { hero.x = x; hero.y = y; snapCam(); },
     spawn: function (kind, n) {
       n = n || 1; var c = 0;
       for (var i = 0; i < n; i++) {

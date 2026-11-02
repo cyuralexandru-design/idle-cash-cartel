@@ -560,13 +560,21 @@ window.G = window.G || {};
   };
 
   // ---------- top bar ----------
+  // shrink the font until the text fits its box (min 10px)
+  function fitText(el) {
+    el.style.fontSize = '';
+    var w = el.clientWidth, sw = el.scrollWidth;
+    if (w > 0 && sw > w) { var fs = parseFloat(getComputedStyle(el).fontSize) || 18; el.style.fontSize = Math.max(10, Math.floor(fs * w / sw * 10) / 10) + 'px'; }
+  }
+  ui.fitTop = function () { ['cash', 'gold', 'gems', 'respect'].forEach(function (k) { var el = $('v-' + k); if (el) fitText(el); }); };
   function updTop(snap, force) {
     ['cash', 'gold', 'gems', 'respect'].forEach(function (k) {
       var t = snap[k], d = disp[k];
       if (force || Math.abs(t - d) < 0.5 || t < d) d = t; else d += (t - d) * 0.35;
       disp[k] = d;
       var el = $('v-' + k), txt = fmt(Math.floor(d));
-      if (el._t !== txt) { el._t = txt; el.textContent = txt; }
+      var ch = el._t !== txt; if (ch) { el._t = txt; el.textContent = txt; }
+      if (ch || (el.clientWidth && el._fw !== el.clientWidth)) { fitText(el); el._fw = el.clientWidth; }
     });
     setText($('v-income'), '+' + money(snap.incomePerSec) + '/s');
     var bo = $('v-boost'); setHide(bo, !snap.boost.active); if (snap.boost.active) setText(bo, 'x2  ' + clock(snap.boost.remainingSec));
@@ -680,44 +688,7 @@ window.G = window.G || {};
     return m;
   };
 
-  function toggleRow(label, key, onchange) {
-    var r = h('div', 'set-row'); r.appendChild(h('span', '', label));
-    var t = h('button', 'toggle'); t.setAttribute('role', 'switch');
-    function paint() { var on = S().settings[key] !== false; t.classList.toggle('on', on); t.setAttribute('aria-checked', on); }
-    paint();
-    tap(t, function () { S().settings[key] = !(S().settings[key] !== false); paint(); G.save.save(); sfx('click'); if (onchange) onchange(); });
-    r.appendChild(t); return r;
-  }
-  ui.showSettings = function () {
-    ui.modal({
-      title: 'Settings', closable: true, cls: 'modal-set',
-      body: function (b) {
-        b.appendChild(toggleRow('Sound', 'sound'));
-        b.appendChild(toggleRow('Screen shake', 'shake'));
-        b.appendChild(toggleRow('Flashes', 'flashes'));
-        var sv = h('div', 'set-sec', 'Save data');
-        b.appendChild(sv);
-        var ta = h('textarea', 'save-box'); ta.rows = 3; ta.placeholder = 'Paste a save string here to import'; ta.setAttribute('spellcheck', 'false');
-        b.appendChild(ta);
-        var row = h('div', 'set-btns');
-        var ex = h('button', 'btn btn-secondary', 'Export'); var im = h('button', 'btn btn-secondary', 'Import'); var rs = h('button', 'btn btn-secondary danger', 'Reset');
-        tap(ex, function () {
-          G.save.save(); ta.value = G.save.exportString(); ta.select();
-          try { if (navigator.clipboard) navigator.clipboard.writeText(ta.value); } catch (e) {}
-          ui.toast('Save string ready to copy');
-        });
-        tap(im, function () {
-          if (G.save.importString(ta.value)) { ui.toast('Save imported'); ui.rebuildAll(); } else ui.toast('That save string is not valid');
-        });
-        var armed = 0;
-        tap(rs, function () {
-          if (!armed) { armed = 1; rs.textContent = 'Tap again to erase'; setTimeout(function () { armed = 0; rs.textContent = 'Reset'; }, 3000); return; }
-          G.save.reset(); seenBiz = {}; ui.toast('Progress erased'); ui.rebuildAll(); armed = 0; rs.textContent = 'Reset';
-        });
-        row.appendChild(ex); row.appendChild(im); row.appendChild(rs); b.appendChild(row);
-      }
-    });
-  };
+  ui.showSettings = function (o) { if (G.settings) G.settings.open(o); };
 
   ui.rebuildAll = function () { try { G.inventory.ensureStarter(); } catch (e) {} inv.sel = null; inv.sig = ''; seenBiz = {}; ui.update('init'); };
 
@@ -733,6 +704,7 @@ window.G = window.G || {};
       });
     });
     tap($('btn-settings'), function () { sfx('click'); ui.showSettings(); });
+    try { if (G.settings) G.settings.apply(); } catch (e) {}
     ui.layout(); window.addEventListener('resize', ui.layout); window.addEventListener('orientationchange', ui.layout);
     ui.update('init');
   };

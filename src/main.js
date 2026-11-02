@@ -39,6 +39,7 @@ window.G = window.G || {};
     list.forEach(function (f) {
       var i = new Image(); i.onload = i.onerror = function () { loaded++; }; i.src = f;
     });
+    try { if (G.street && G.street.load) { n += 1; G.street.load(function () { loaded++; }); } } catch (e) {}
     try { if (G.puppet && G.puppet.load) { n += 1; G.puppet.load(function (d, t) { if (d >= t) loaded++; }); } } catch (e) {}
     requestAnimationFrame(paint);
     setTimeout(finish, 9000);
@@ -46,6 +47,7 @@ window.G = window.G || {};
 
   function showScreen(id) {
     ['scr-loading', 'scr-hub', 'scr-arena'].forEach(function (s) { $(s).hidden = s !== id; });
+    try { if (G.audio && id !== 'scr-loading') G.audio.startMusic(id === 'scr-arena' ? 'raid' : 'menu'); } catch (e) {}
   }
 
   function checkOffline() {

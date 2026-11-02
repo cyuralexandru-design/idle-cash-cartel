@@ -16,7 +16,7 @@ window.G = window.G || {};
       v: CURRENT, cash: 0, gold: 0, gems: 0, respect: 0, lastSeen: Date.now(),
       businesses: {}, weapons: {}, startWeapon: 'pistol', perm: {},
       stats: { bestWave: 0, runs: 0, totalCash: 0 },
-      settings: { sound: true, shake: true, flashes: true },
+      settings: { sound: true, shake: true, flashes: true, master: 1, sfx: 1, music: 0.6, dmgNumbers: true, vibration: true, showFps: false, joySide: 'right', joySize: 1 },
       boosts: { incomeX2Until: 0 },
       // v0.3 additive fields
       chapters: { progress: { '1': 0, '2': 0, '3': 0 }, selected: 1 },
