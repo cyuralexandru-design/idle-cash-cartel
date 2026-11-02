@@ -22,9 +22,12 @@ window.G = window.G || {};
     '.arena-money{color:#4caf50;font-weight:800}',
     '.arena-lock.arena-on{background:#b3202a;color:#fff}',
     '.arena-sold{opacity:.35;pointer-events:none}',
-    '.arena-owned{display:grid;grid-template-columns:repeat(3,1fr);gap:.4em}',
-    '.arena-wslot{min-height:5em;padding:.4em;cursor:default;font-size:.88em}',
-    '.arena-wslot.arena-empty{opacity:.35;justify-content:center;align-items:center}',
+    '.arena-wcard{grid-column:1/-1;min-height:0;cursor:default}',
+    '.arena-wicon{width:5.6em;height:3.6em;flex:none;display:flex;align-items:center;justify-content:center}',
+    '.arena-wicon img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 2px 2px #000)}',
+    '.arena-stats{display:flex;flex-wrap:wrap;gap:.25em .8em;font-size:.82em;font-weight:700}',
+    '.arena-stats b{color:#e8a317}',
+    '.arena-up{color:#7df29a}',
     '.arena-chips{display:flex;flex-wrap:wrap;gap:.3em;font-size:.8em}',
     '.arena-chip{background:#2d3138;border-radius:1em;padding:.2em .6em;cursor:pointer}',
     '.arena-toast{position:absolute;left:50%;top:12%;transform:translateX(-50%);background:#e8a317;color:#14161a;font-weight:800;padding:.5em 1em;border-radius:1em;z-index:30;font-family:system-ui,sans-serif;pointer-events:none}',
@@ -57,20 +60,26 @@ window.G = window.G || {};
   }
   function close() { if (layer && layer.parentNode) layer.parentNode.removeChild(layer); layer = null; }
 
-  function emblem(kind, id, text, color) {
+  function imgSrc(file) { var b = (G.arena && G.arena.basePath != null) ? G.arena.basePath : ''; return b + file; }
+  // icon box: file = image path (relative to the project root); falls back to initials only if the image fails to load
+  function emblemFile(file, text, color) {
     var e = el('div', 'arena-emblem');
+    if (file) {
+      var img = new Image(); img.src = imgSrc(file); img.alt = ''; e.style.background = 'transparent'; e.appendChild(img);
+      img.onerror = function () { if (img.parentNode) e.removeChild(img); e.style.background = color || '#888'; e.textContent = text; };
+    } else { e.style.background = color || '#888'; e.textContent = text; }
+    return e;
+  }
+  function manifestFile(kind, id) {
     var M = window.G_MANIFEST, ent = null;
     try {
       if (kind === 'stat' && M && M.stats) ent = M.stats[id];
       if (kind === 'weapon' && M && M.weapons) ent = (M.weapons[id] && (M.weapons[id].side || M.weapons[id])) || null;
-      if (kind === 'item' && M && M.items) ent = M.items[id];
+      if (kind === 'item' && M && M.icons) ent = M.icons[id];
     } catch (x) {}
-    if (ent && ent.file) {
-      var img = new Image(); img.src = ent.file; img.alt = ''; e.style.background = 'transparent'; e.appendChild(img);
-      img.onerror = function () { e.removeChild(img); e.style.background = color || '#888'; e.textContent = text; };
-    } else { e.style.background = color || '#888'; e.textContent = text; }
-    return e;
+    return ent && ent.file || null;
   }
+  function emblem(kind, id, text, color, file) { return emblemFile(file || manifestFile(kind, id), text, color); }
   function initials(n) { var p = String(n).split(/[\s-]+/); return (p.length > 1 ? p[0][0] + p[1][0] : n.slice(0, 2)).toUpperCase(); }
 
   G.arenaUI = {
@@ -118,8 +127,8 @@ window.G = window.G || {};
       row.appendChild(rr); L.appendChild(row);
     },
 
-    // view: {wave, cash, rerollCost, offers:[{kind,id,name,desc,price,locked,sold,canBuy,why,tier,emblem,color}], weapons:[{slot,id,name,tier,tierName,sellPrice,canMerge}|null], items:[{id,name,count,sellPrice}], mergePrompt, lastWave}
-    // act: {buy(i), lock(i), reroll(), recycleWeapon(slot), recycleItem(id), merge(slot), next()}
+    // view: {wave, cash, rerollCost, weapon:{id,name,tier,tierName,color,stats,next,price,canBuy,why}, offers:[{kind:'item',id,name,desc,price,locked,sold,canBuy,why,icon,iconFile,color}], items:[{id,name,iconFile,count,sellPrice}], lastWave}
+    // act: {buy(i), upgrade(), lock(i), reroll(), recycleItem(id), next()}
     showShop: function (view, act) {
       var scroll = layer ? layer.scrollTop : 0;
       var L = open(); L.setAttribute('data-screen', 'shop');
@@ -129,14 +138,32 @@ window.G = window.G || {};
       var rr = el('button', 'arena-btn arena-sec', 'Reroll  $' + view.rerollCost); rr.setAttribute('data-act', 'reroll');
       rr.disabled = view.cash < view.rerollCost; rr.onclick = function () { sfx('click'); act.reroll(); };
       top.appendChild(rr); L.appendChild(top);
-      if (view.mergePrompt) L.appendChild(el('div', 'arena-sub', view.mergePrompt));
       var grid = el('div', 'arena-cards'); L.appendChild(grid);
+      var wv = view.weapon;
+      if (wv) {
+        var wc = el('div', 'arena-offer arena-wcard arena-tier-' + (wv.tier + 1)); wc.setAttribute('data-weapon', wv.id); wc.setAttribute('data-tier', wv.tier + 1);
+        var wt = el('div', 'arena-row'); wt.style.justifyContent = 'flex-start'; wt.style.flexWrap = 'nowrap';
+        var wi = el('div', 'arena-wicon'); var wimg = new Image(); wimg.src = imgSrc(manifestFile('weapon', wv.id) || ''); wimg.alt = ''; wi.appendChild(wimg); wimg.onerror = function () { wi.textContent = initials(wv.name); };
+        wt.appendChild(wi);
+        var wn = el('div'); wn.appendChild(el('div', 'arena-name', wv.name)); var wtag = el('div', 'arena-tag', 'Your weapon  -  Tier ' + wv.tierName); wtag.style.color = wv.color; wn.appendChild(wtag);
+        wt.appendChild(wn); wc.appendChild(wt);
+        var sl = function (s) { var d = el('div', 'arena-stats'), add = function (k, v) { var sp = el('span'); sp.appendChild(el('b', null, k + ' ')); sp.appendChild(document.createTextNode(v)); d.appendChild(sp); };
+          add('DMG', s.dmg + (s.proj > 1 ? ' x' + s.proj : '')); add('DPS', s.dps); add('RATE', s.rate + '/s'); add('RNG', s.range); if (s.pierce > 0) add('PIERCE', s.pierce); if (s.splash) add('SPLASH', 'yes'); if (s.beam) add('BEAM', 'pierce'); return d; };
+        wc.appendChild(sl(wv.stats));
+        var ur = el('div', 'arena-row');
+        if (wv.next) {
+          var ud = el('div', 'arena-desc arena-up', 'Next: ' + wv.next.name + ' ' + wv.next.tierName + '  DPS ' + wv.next.stats.dps + ' (now ' + wv.stats.dps + ')' + (wv.next.stats.pierce > wv.stats.pierce ? '  +pierce' : '') + (wv.next.stats.proj > wv.stats.proj ? '  +shot' : '')); ud.style.flex = '1';
+          var ub = el('button', 'arena-btn arena-upgrade', wv.canBuy ? 'Upgrade weapon $' + wv.price : (wv.why && /^Wave/.test(wv.why) ? 'Upgrade at ' + wv.why : 'Upgrade $' + wv.price)); ub.setAttribute('data-act', 'upgrade'); ub.disabled = !wv.canBuy;
+          ub.onclick = function () { act.upgrade(); }; wc.appendChild(ud); ur.appendChild(ub);
+        } else { ur.appendChild(el('div', 'arena-tag', 'MAX TIER')); }
+        wc.appendChild(ur); grid.appendChild(wc);
+      }
       view.offers.forEach(function (o, i) {
         var box = el('div', 'arena-offer arena-tier-' + (o.tier + 1) + (o.sold ? ' arena-sold' : '')); box.setAttribute('data-offer', i); box.style.cursor = 'default';
         var t = el('div', 'arena-row'); t.style.justifyContent = 'flex-start';
-        t.appendChild(emblem(o.kind, o.id, o.emblem, o.color));
+        t.appendChild(emblem('item', o.icon || o.id, o.emblem, o.color, o.iconFile));
         var nm = el('div'); nm.appendChild(el('div', 'arena-name', o.name));
-        nm.appendChild(el('div', 'arena-tag', o.kind === 'weapon' ? 'Weapon  Tier ' + o.tierName : 'Item')); t.appendChild(nm); box.appendChild(t);
+        nm.appendChild(el('div', 'arena-tag', 'Passive item')); t.appendChild(nm); box.appendChild(t);
         box.appendChild(el('div', 'arena-desc', o.desc));
         var r = el('div', 'arena-row');
         var buy = el('button', 'arena-btn arena-buy', o.sold ? 'Sold' : (o.canBuy ? 'Buy $' + o.price : (o.why || 'Buy $' + o.price)));
@@ -145,22 +172,11 @@ window.G = window.G || {};
         lk.onclick = function () { sfx('click'); act.lock(i); };
         r.appendChild(buy); r.appendChild(lk); box.appendChild(r); grid.appendChild(box);
       });
-      L.appendChild(el('div', 'arena-sub', 'Your weapons (' + view.weapons.filter(Boolean).length + '/' + view.weapons.length + ')'));
-      var own = el('div', 'arena-owned'); L.appendChild(own);
-      view.weapons.forEach(function (w) {
-        if (!w) { own.appendChild(el('div', 'arena-wslot arena-empty', 'empty')); return; }
-        var s = el('div', 'arena-wslot arena-tier-' + (w.tier + 1)); s.setAttribute('data-slot', w.slot);
-        s.appendChild(el('div', 'arena-name', w.name + ' ' + w.tierName));
-        var br = el('div', 'arena-row');
-        if (w.canMerge) { var m = el('button', 'arena-btn arena-merge', 'Merge'); m.setAttribute('data-act', 'merge'); m.onclick = function () { sfx('buy'); act.merge(w.slot); }; br.appendChild(m); }
-        var rc = el('button', 'arena-btn arena-sec', 'Sell $' + w.sellPrice); rc.setAttribute('data-act', 'recycle'); rc.onclick = function () { sfx('click'); act.recycleWeapon(w.slot); };
-        br.appendChild(rc); s.appendChild(br); own.appendChild(s);
-      });
       if (view.items.length) {
         L.appendChild(el('div', 'arena-sub', 'Items (tap to recycle for 25%)'));
         var ch = el('div', 'arena-chips');
         view.items.forEach(function (it) {
-          var c = el('span', 'arena-chip', it.name + (it.count > 1 ? ' x' + it.count : '') + '  $' + it.sellPrice); c.setAttribute('data-item', it.id);
+          var c = el('span', 'arena-chip'); c.setAttribute('data-item', it.id); if (it.iconFile) { var ci = new Image(); ci.src = imgSrc(it.iconFile); ci.alt = ''; ci.style.cssText = 'height:1.3em;vertical-align:middle;margin-right:.3em'; c.appendChild(ci); } c.appendChild(document.createTextNode(it.name + (it.count > 1 ? ' x' + it.count : '') + '  $' + it.sellPrice));
           c.onclick = function () { sfx('click'); act.recycleItem(it.id); }; ch.appendChild(c);
         });
         L.appendChild(ch);

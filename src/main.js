@@ -4,7 +4,7 @@ window.G = window.G || {};
   'use strict';
   var M = window.G_MANIFEST || {};
   var $ = function (id) { return document.getElementById(id); };
-  var started = false, inRaid = false, lastT = 0, hiddenAt = 0, offlineShown = false;
+  var started = false, inRaid = false, raidChapter = 1, lastT = 0, hiddenAt = 0, offlineShown = false;
 
   function preloadList() {
     var out = [], seen = {};
@@ -15,6 +15,9 @@ window.G = window.G || {};
       Object.keys(M.businesses || {}).forEach(function (id) { [1, 2, 3].forEach(function (l) { var e = M.businesses[id][l]; if (e) add((e.thumb || e).file); }); });
       Object.keys(M.managers || {}).forEach(function (id) { add(M.managers[id].icon && M.managers[id].icon.file); });
       Object.keys(M.weapons || {}).forEach(function (id) { add(M.weapons[id].side && M.weapons[id].side.file); });
+      try { G.inventory.iconFiles().forEach(function (k) { if (M.icons[k]) add(M.icons[k].file); }); } catch (e) {}
+      ['star', 'medal_gold', 'laurel_wreath', 'briefcase', 'map_pin', 'chest', 'handshake'].forEach(function (k) { if (M.icons && M.icons[k]) add(M.icons[k].file); });
+      try { G.chapters.list.forEach(function (c) { add(c.art); }); G.story.preloadFiles().forEach(add); } catch (e) {}
       ['cash_stack', 'gold_bars', 'ruby_gem', 'crown', 'gear', 'crew', 'upgrade_chevrons', 'gift_box', 'skull', 'crosshair', 'boost_2x', 'no_ads_badge', 'safe', 'gift', 'biz_bank', 'lock'].forEach(function (k) { if (M.icons && M.icons[k]) add(M.icons[k].file); });
       if (M.bg) { add(M.bg.bg_alley && M.bg.bg_alley.file); add(M.bg.map_london && M.bg.map_london.file); }
     } catch (e) {}
@@ -65,19 +68,22 @@ window.G = window.G || {};
     inRaid = true; G.save.save();
     showScreen('scr-arena');
     var st = G.save.state;
+    try { raidChapter = G.chapters.selected(); } catch (e) { raidChapter = 1; }
     G.arena.start({
       canvas: $('cv'),
+      chapter: raidChapter,
       loadout: { startWeapon: st.startWeapon, weapons: st.weapons },
       onEnd: onRaidEnd
     });
   }
 
   function onRaidEnd(r) {
-    var res = G.economy.applyRaidResult(r);
+    var res = G.economy.applyRaidResult(r), rec = null, drops = [];
+    try { rec = G.chapters.record(raidChapter, r); drops = G.inventory.raidDrops(r, raidChapter); } catch (e) {}
     G.save.save();
     showScreen('scr-hub'); inRaid = false;
     G.ui.update('init');
-    G.ui.showResult(r, res, function () { G.ui.setTab('raid'); G.ui.update('init'); });
+    G.ui.showResult(r, res, function () { G.ui.setTab('raid', true); G.ui.update('init'); }, { chapter: raidChapter, rec: rec, items: drops });
   }
 
   function begin() {
@@ -86,8 +92,10 @@ window.G = window.G || {};
     var ld = $('scr-loading'); ld.classList.add('out');
     setTimeout(function () { ld.hidden = true; }, 350);
     showScreen('scr-hub'); $('scr-loading').hidden = false;
+    G.ui.setTab('raid', true);
     G.ui.update('init');
     checkOffline();
+    try { if (!offlineShown) G.story.maybeIntro(); } catch (e) {}
   }
 
   function boot() {

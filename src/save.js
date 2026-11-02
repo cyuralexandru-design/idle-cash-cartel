@@ -17,7 +17,12 @@ window.G = window.G || {};
       businesses: {}, weapons: {}, startWeapon: 'pistol', perm: {},
       stats: { bestWave: 0, runs: 0, totalCash: 0 },
       settings: { sound: true, shake: true, flashes: true },
-      boosts: { incomeX2Until: 0 }
+      boosts: { incomeX2Until: 0 },
+      // v0.3 additive fields
+      chapters: { progress: { '1': 0, '2': 0, '3': 0 }, selected: 1 },
+      inventory: { items: [], equipped: {}, nextId: 1, starter: false },
+      crew: { levels: {} },
+      story: { seen: {} }
     };
     if (cfg && cfg.start) {
       st.cash = cfg.start.cash; st.gold = cfg.start.gold; st.gems = cfg.start.gems; st.respect = cfg.start.respect;

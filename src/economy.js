@@ -40,15 +40,26 @@ window.G = window.G || {};
   }
 
   // ---- multipliers ----
+  // additive hooks: G.inventory.bonuses() / G.crew.bonuses() return {<stat>: value} in perm units
+  // (pct = fraction, flat = absolute). Extra keys gold_pct / cash_pct are economy-only multipliers.
+  function extraBonuses() {
+    var o = {};
+    ['inventory', 'crew'].forEach(function (k) {
+      try { var m = G[k]; if (m && m.bonuses) { var b = m.bonuses(); for (var s in b) o[s] = (o[s] || 0) + b[s]; } } catch (e) {}
+    });
+    return o;
+  }
   function permBonuses() {
     var out = {}, st = C().perm.stats, p = S().perm;
     st.forEach(function (s) { out[s.id] = (p[s.id] || 0) * s.perLevel; });
+    var ex = extraBonuses();
+    for (var k in ex) out[k] = (out[k] || 0) + ex[k];
     return out;
   }
   function boostActive() { return S().boosts.incomeX2Until > clock(); }
   function globalMult(noBoost) {
     var h = (S().perm.harvesting || 0) * C().perm.stats.filter(function (s) { return s.id === 'harvesting'; })[0].perLevel;
-    var m = 1 + h;
+    var m = 1 + h + (extraBonuses().cash_pct || 0);
     if (!noBoost && boostActive()) m *= C().boosts.incomeX2_gems.mult;
     return m;
   }
@@ -180,12 +191,13 @@ window.G = window.G || {};
     applyRaidResult: function (r) {
       r = r || {};
       var R = C().raid, s = S(), wave = Math.max(0, Math.floor(r.wave || 0));
-      var cash = (r.cash || 0) * R.cashConv + incomePerSec() * R.incomeSecPerWave * wave * (r.win ? R.winMult : 1);
+      var ex = extraBonuses();
+      var cash = (r.cash || 0) * R.cashConv * (1 + (ex.cash_pct || 0)) + incomePerSec() * R.incomeSecPerWave * wave * (r.win ? R.winMult : 1);
       var gold = (r.gold || 0) * R.goldConv + wave * R.goldPerWave +
         (r.bossDown ? R.bossGold : 0) +
         Math.floor(wave / R.milestoneEveryWaves) * R.milestoneGold +
         (r.win ? R.winGold : 0);
-      gold = Math.floor(gold);
+      gold = Math.floor(gold * (1 + (ex.gold_pct || 0)));
       var gems = 0, prev = s.stats.bestWave;
       R.gemMilestones.forEach(function (m) { if (prev < m && wave >= m) gems += R.gemMilestoneReward; });
       addCash(cash);
